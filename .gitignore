@@ -37,8 +37,11 @@ ENV/
 robot_eva.log
 
 # Config (может содержать секретные ключи)
+config.yaml
 config.yaml.local
 config.yaml.backup
+*.env
+.env.local
 
 # Модели (большие файлы)
 models/*.ppn
@@ -47,5 +50,33 @@ models/*.ppn
 # Временные файлы
 *.tmp
 *.temp
+*.bak
+*.swp
 .DS_Store
+Thumbs.db
+
+# Логи и данные
+logs/
+*.log
+*.log
+data/
+cache/
+
+# Скомпилированные файлы Arduino
+arduino_led/*.hex
+arduino_led/*.elf
+
+# Системные файлы
+*.pid
+*.sock
+*.lock
+
+# Тестовые файлы
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Документация сборки
+docs/_build/
+site/
 

@@ -14,6 +14,7 @@ sudo apt-get install -y \
     python3-pip \
     python3-dev \
     python3-venv \
+    build-essential \
     i2c-tools \
     libasound2-dev \
     portaudio19-dev \
@@ -23,23 +24,30 @@ sudo apt-get install -y \
     vlc \
     libopencv-dev \
     python3-opencv \
-    git
+    git \
+    libffi-dev \
+    libssl-dev
 
 # Включение I2C
 echo "Включение I2C..."
 sudo raspi-config nonint do_i2c 0
 
-# Создание виртуального окружения (опционально)
-if [ "$1" == "--venv" ]; then
+# Создание виртуального окружения (опционально, но рекомендуется)
+if [ "$1" != "--no-venv" ]; then
     echo "Создание виртуального окружения..."
-    python3 -m venv venv
+    if [ ! -d "venv" ]; then
+        python3 -m venv venv
+    fi
     source venv/bin/activate
+    PIP_CMD="pip"
+else
+    PIP_CMD="pip3"
 fi
 
 # Установка Python зависимостей
 echo "Установка Python зависимостей..."
-pip3 install --upgrade pip
-pip3 install -r requirements.txt
+$PIP_CMD install --upgrade pip
+$PIP_CMD install -r requirements.txt
 
 # Создание директорий
 echo "Создание необходимых директорий..."

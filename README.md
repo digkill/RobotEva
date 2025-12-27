@@ -39,23 +39,39 @@
 cd /home/pi/Projects/RobotEva
 ```
 
-2. Запустите скрипт установки (рекомендуется):
+2. Установите системные зависимости (обязательно перед установкой Python пакетов):
+```bash
+sudo apt-get update
+sudo apt-get install -y portaudio19-dev libportaudio2 libportaudiocpp0 libasound2-dev build-essential
+```
+
+3. Запустите скрипт установки (рекомендуется):
 ```bash
 ./setup.sh
 ```
 
+Скрипт автоматически:
+- Установит все системные зависимости
+- Создаст виртуальное окружение (если не указан флаг `--no-venv`)
+- Установит Python зависимости
+
 Или установите зависимости вручную:
 ```bash
-pip3 install -r requirements.txt
+# Создайте виртуальное окружение (рекомендуется)
+python3 -m venv venv
+source venv/bin/activate
+
+# Установите зависимости
+pip install -r requirements.txt
 ```
 
-3. Загрузите код на Arduino для LED контроллера:
+4. Загрузите код на Arduino для LED контроллера:
    - Откройте `arduino_led/led_controller.ino` в Arduino IDE
    - Настройте пины RGB LED в соответствии с вашим модулем
    - Загрузите код на Arduino
    - Подключите Arduino к Raspberry Pi через USB
 
-3. Настройте конфигурацию:
+5. Настройте конфигурацию:
 ```bash
 cp config.yaml config.yaml.backup
 nano config.yaml
@@ -66,7 +82,7 @@ nano config.yaml
 - `ai.openai.api_key` - ключ OpenAI API
 - `ai.grok.api_key` - ключ Grok API
 
-4. Убедитесь, что все устройства подключены и доступны:
+6. Убедитесь, что все устройства подключены и доступны:
 - Проверьте I2C устройства (PCA9685): `i2cdetect -y 1`
 - Проверьте USB устройства: `lsusb`
 - Проверьте последовательные порты: `ls /dev/tty*`
@@ -76,6 +92,13 @@ nano config.yaml
 
 ## Запуск
 
+Если используете виртуальное окружение (рекомендуется):
+```bash
+source venv/bin/activate
+python main.py
+```
+
+Или без виртуального окружения:
 ```bash
 python3 main.py
 ```
@@ -84,6 +107,8 @@ python3 main.py
 ```bash
 sudo python3 main.py
 ```
+
+**Важно:** Если вы используете виртуальное окружение, активируйте его перед запуском!
 
 ## Настройка Arduino LED
 
@@ -140,6 +165,52 @@ RobotEva/
 4. **Добавить новые сервисы** в `robot_eva/services/`
 
 Все модули следуют единому интерфейсу с методами `initialize()`, `cleanup()` и соответствующими методами работы.
+
+## Решение проблем
+
+### Ошибка при установке pyaudio
+
+Если при установке `pyaudio` возникает ошибка `fatal error: portaudio.h: No such file or directory`:
+
+```bash
+sudo apt-get install -y portaudio19-dev libportaudio2 libportaudiocpp0 libasound2-dev build-essential
+```
+
+Затем повторите установку:
+```bash
+pip install pyaudio
+```
+
+### Ошибка "externally-managed-environment"
+
+Если получаете ошибку о внешне управляемом окружении, используйте виртуальное окружение:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Проблемы с I2C устройствами
+
+Если сервоконтроллер PCA9685 не определяется:
+
+```bash
+# Проверьте подключение
+i2cdetect -y 1
+
+# Убедитесь, что I2C включен
+sudo raspi-config
+# Интерфейсы -> I2C -> Enable
+```
+
+### Проблемы с USB устройствами
+
+Проверьте подключение USB устройств:
+```bash
+lsusb
+ls /dev/tty*
+```
 
 ## Лицензия
 
