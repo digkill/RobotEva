@@ -1,0 +1,122 @@
+# Конфигурация робота Eva
+
+# Настройки железа
+hardware:
+  # Сервоприводы через PCA9685
+  servos:
+    i2c_address: 0x40
+    frequency: 50
+  
+  # Дисплеи
+  display:
+    small:
+      enabled: true
+      size: [320, 240]
+      spi:
+        port: 0
+        device: 0
+    hdmi:
+      enabled: true
+      size: [1920, 1080]
+  
+  # Аудио
+  audio:
+    sample_rate: 16000
+    chunk_size: 1024
+    channels: 1
+    input_device: null  # Автоматический поиск USB микрофона
+    output_device: null  # Автоматический поиск USB динамика
+    record_duration: 5
+  
+  # Камера
+  camera:
+    index: 0
+    resolution: [640, 480]
+    fps: 30
+  
+  # Сенсоры
+  sensors:
+    mmwave:
+      enabled: true
+      port: /dev/ttyUSB0
+      baudrate: 115200
+    expansion:
+      enabled: true
+  
+  # LED индикатор
+  led:
+    arduino:
+      enabled: true
+      port: /dev/ttyACM0
+      baudrate: 9600
+
+# Настройки AI
+ai:
+  # Wake word (Porcupine)
+  wake_word:
+    model_path: /home/pi/Projects/RobotEva/models/Hey-Eva_en_raspberry-pi_v4_0_0.ppn
+    access_key: ""  # Получите ключ на https://console.picovoice.ai/
+  
+  # OpenAI API
+  openai:
+    api_key: ""  # Ваш OpenAI API ключ
+  
+  # Распознавание речи
+  speech_to_text:
+    model: whisper-1
+    language: ru
+  
+  # Синтез речи
+  text_to_speech:
+    model: tts-1
+    voice: alloy  # alloy, echo, fable, onyx, nova, shimmer
+    speed: 1.0
+  
+  # Компьютерное зрение
+  vision:
+    model: gpt-4-vision-preview
+    max_tokens: 300
+  
+  # Grok API (LLM)
+  grok:
+    api_key: ""  # Ваш Grok API ключ
+    api_url: https://api.x.ai/v1/chat/completions
+    model: grok-beta
+    temperature: 0.7
+    max_tokens: 1000
+    max_history: 10
+
+# Сервисы
+services:
+  # Умный дом
+  smart_home:
+    mqtt:
+      enabled: false
+      host: localhost
+      port: 1883
+      username: ""
+      password: ""
+    homeassistant:
+      enabled: false
+      url: http://homeassistant:8123
+      token: ""
+    tuya:
+      enabled: false
+  
+  # Интернет
+  internet:
+    search_engine: duckduckgo  # duckduckgo или google
+    max_results: 5
+    google:
+      api_key: ""
+      cx: ""
+    weather:
+      api_key: ""  # OpenWeatherMap API ключ
+  
+  # Медиа
+  media:
+    player: vlc  # vlc или omxplayer
+    music_path: /home/pi/Music
+    youtube:
+      enabled: true
+
