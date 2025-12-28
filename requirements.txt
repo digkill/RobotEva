@@ -22,8 +22,15 @@ numpy>=1.24.0
 
 # AI и ML
 openai>=1.0.0
-pvporcupine>=3.0.0
 pvrecorder>=1.2.0
+openwakeword==0.6.0
+onnxruntime==1.23.2
+scipy==1.16.3
+scikit-learn==1.8.0
+
+# 2.8" SPI display (Adafruit RGB Display)
+adafruit-blinka>=8.0.0
+adafruit-circuitpython-rgb-display>=3.12.0
 
 # HTTP клиенты
 requests>=2.31.0

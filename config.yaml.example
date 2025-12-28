@@ -52,10 +52,17 @@ hardware:
 
 # Настройки AI
 ai:
-  # Wake word (Porcupine)
+  # Wake word (OpenWakeWord, офлайн)
   wake_word:
-    model_path: /home/pi/Projects/RobotEva/models/Hey-Eva_en_raspberry-pi_v4_0_0.ppn
-    access_key: ""  # Получите ключ на https://console.picovoice.ai/
+    openwakeword:
+      cache_dir: /home/pi/Projects/RobotEva/models/openwakeword
+      mode: custom
+      # custom ("Hey Eva")
+      classifier_path: /home/pi/Projects/RobotEva/models/openwakeword/hey_eva_classifier.pkl
+      threshold: 0.75
+      consecutive_frames: 3
+      debounce_seconds: 1.2
+      frame_length: 1280
   
   # OpenAI API
   openai:

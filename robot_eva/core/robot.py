@@ -218,8 +218,8 @@ class RobotEva:
         """Основной цикл работы робота"""
         while self.is_running:
             try:
-                # Ожидание wake word
-                if self.wake_word_detector and self.wake_word_detector.porcupine:
+                # Ожидание wake word (OpenWakeWord)
+                if self.wake_word_detector:
                     if await self.wake_word_detector.detect():
                         self.logger.info("Wake word обнаружен!")
                         if self.led_controller:
@@ -231,10 +231,6 @@ class RobotEva:
                         
                         # Слушаем команду
                         await self._process_command()
-                else:
-                    # Если wake word недоступен, просто ждем
-                    # Можно добавить альтернативные способы активации
-                    pass
                 
                 await asyncio.sleep(0.1)
                 

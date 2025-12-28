@@ -46,12 +46,16 @@ config.yaml.backup
 # Модели (большие файлы)
 models/*.ppn
 !models/.gitkeep
+models/openwakeword/
 
 # Временные файлы
 *.tmp
 *.temp
 *.bak
 *.swp
+.venv/
+_tmp/
+tmp_face_test.png
 .DS_Store
 Thumbs.db
 

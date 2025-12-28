@@ -85,7 +85,6 @@ nano config.yaml
 ```
 
 Заполните необходимые API ключи:
-- `ai.wake_word.access_key` - ключ Porcupine (получите на https://console.picovoice.ai/)
 - `ai.openai.api_key` - ключ OpenAI API
 - `ai.grok.api_key` - ключ Grok API
 
@@ -103,6 +102,17 @@ nano config.yaml
 ```bash
 source venv/bin/activate
 python main.py
+```
+
+### Если на DSI виден рабочий стол, а эмоций нет
+
+Если у вас включён Desktop (видите рабочий стол), а робот запущен из SSH/tty, у процесса **нет** `DISPLAY/WAYLAND_DISPLAY`,
+и SDL-окно с эмоциями не появится.
+
+Запускайте робота внутри desktop-сессии через скрипт:
+
+```bash
+./scripts/run_on_desktop.sh
 ```
 
 Или без виртуального окружения:
@@ -218,6 +228,22 @@ sudo apt-get install -y swig liblgpio-dev
 Затем установите Python пакет:
 ```bash
 pip install lgpio
+
+### 2.8" SPI дисплей: "GPIO busy" на CS (BCM8/BCM7)
+
+Если при старте видите:
+
+- `Не удалось захватить CS pin (BCM8) — GPIO busy`
+
+Это означает, что стандартные SPI chip-select линии **CE0/CE1** заняты ядром Linux (у вас есть `/dev/spidev0.0`, `/dev/spidev0.1`), и библиотека дисплея не может “захватить” CS как GPIO.
+
+Решение:
+
+- Подключите **CS (chip select) дисплея** на **любой свободный GPIO** (например **BCM5** или **BCM6**)
+- В `config.yaml` установите:
+  - `hardware.display.small.cs_pin: 5` (или другой пин, который вы выбрали)
+
+Также убедитесь, что `dc_pin` и `reset_pin` выставлены под вашу разводку.
 ```
 
 ### Ошибка ImportError: cannot import name 'LSM6DS33'
