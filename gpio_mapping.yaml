@@ -1,0 +1,218 @@
+# Маппинг GPIO и устройств для RobotEva
+# Этот файл содержит централизованную конфигурацию всех GPIO пинов и устройств
+
+# I2C устройства
+i2c:
+  # Сервоконтроллер PCA9685
+  pca9685:
+    enabled: true
+    address: 0x40  # Адрес по умолчанию (можно изменить перемычками A0-A5)
+    bus: 1  # I2C шина (обычно 1 для Raspberry Pi)
+    frequency: 50  # Частота ШИМ в Гц
+    description: "Контроллер сервоприводов PCA9685"
+    
+  # BME280 (температура и влажность)
+  bme280:
+    enabled: true
+    address: 0x76  # Или 0x77 в зависимости от перемычки SDO
+    bus: 1
+    description: "Датчик температуры и влажности BME280"
+    
+  # LSM6DS (гироскоп/акселерометр)
+  lsm6ds:
+    enabled: true
+    address: 0x6A  # Или 0x6B в зависимости от перемычки SDO
+    bus: 1
+    description: "Гироскоп и акселерометр LSM6DS"
+
+# Сервоприводы (подключены к PCA9685)
+servos:
+  # Голова
+  head_pitch:
+    channel: 0
+    min_angle: 0
+    max_angle: 180
+    default_angle: 90
+    description: "Наклон головы (вверх/вниз)"
+    
+  head_yaw:
+    channel: 1
+    min_angle: 0
+    max_angle: 180
+    default_angle: 90
+    description: "Поворот головы (влево/вправо)"
+    
+  # Шея
+  neck_pitch:
+    channel: 2
+    min_angle: 0
+    max_angle: 180
+    default_angle: 90
+    description: "Наклон шеи"
+    
+  # Руки
+  left_arm:
+    channel: 3
+    min_angle: 0
+    max_angle: 180
+    default_angle: 90
+    description: "Левая рука"
+    
+  right_arm:
+    channel: 4
+    min_angle: 0
+    max_angle: 180
+    default_angle: 90
+    description: "Правая рука"
+
+# SPI устройства
+spi:
+  # 2.8" дисплей (если используется SPI)
+  small_display:
+    enabled: true
+    port: 0
+    device: 0
+    speed: 24000000  # 24 MHz
+    description: "2.8 дюймовый дисплей через SPI"
+    # Типичные пины для SPI0:
+    # MOSI: GPIO 10 (Pin 19)
+    # MISO: GPIO 9 (Pin 21)
+    # SCLK: GPIO 11 (Pin 23)
+    # CS: GPIO 8 (Pin 24) или другой GPIO
+
+# Последовательные порты (UART/Serial) - если используются USB
+serial:
+  # Зарезервировано для USB устройств
+  pass
+
+# GPIO пины для устройств
+gpio_pins:
+  # mmWave датчик C1001 DFRobot (через UART GPIO)
+  mmwave_c1001:
+    enabled: true
+    uart: "uart0"  # Или uart1, uart2, uart3, uart4, uart5
+    tx_pin: 14  # GPIO 14 (Pin 8) - TX для UART0
+    rx_pin: 15  # GPIO 15 (Pin 10) - RX для UART0
+    baudrate: 115200
+    timeout: 1
+    description: "Датчик присутствия mmWave C1001 через GPIO UART"
+    # Альтернативные UART пины:
+    # UART1: TX=GPIO 14, RX=GPIO 15
+    # UART2: TX=GPIO 0, RX=GPIO 1
+    # UART3: TX=GPIO 4, RX=GPIO 5
+    # UART4: TX=GPIO 8, RX=GPIO 9
+    # UART5: TX=GPIO 12, RX=GPIO 13
+    
+  # Arduino LED модуль (7-цветной мигающий) через GPIO
+  arduino_led:
+    enabled: true
+    # RGB LED пины (если используется RGB LED напрямую)
+    red_pin: 18    # GPIO 18 (Pin 12) - PWM канал 0
+    green_pin: 19  # GPIO 19 (Pin 35) - PWM канал 1
+    blue_pin: 13   # GPIO 13 (Pin 33) - PWM канал 2
+    # Или если используется WS2812/NeoPixel
+    # data_pin: 18  # GPIO 18 для WS2812
+    pwm_frequency: 1000  # Частота PWM в Гц
+    description: "RGB LED модуль (7-цветной мигающий) через GPIO"
+    # Примечание: Если используется WS2812, используйте библиотеку rpi_ws281x
+
+# USB устройства
+usb:
+  # Микрофон
+  microphone:
+    enabled: true
+    device_index: null  # null = автоматический поиск
+    description: "USB микрофон"
+    # Для поиска: lsusb | grep -i audio
+    # Для проверки: arecord -l
+    
+  # Динамики
+  speakers:
+    enabled: true
+    device_index: null  # null = автоматический поиск
+    description: "USB динамики"
+    # Для поиска: lsusb | grep -i audio
+    # Для проверки: aplay -l
+    
+  # Камера
+  camera:
+    enabled: true
+    index: 0  # /dev/video0
+    description: "USB камера"
+    # Для проверки: lsusb | grep -i camera
+    # Для проверки: v4l2-ctl --list-devices
+
+# GPIO пины (если используются напрямую)
+gpio_pins:
+  # Пример: если LED подключен напрямую к GPIO
+  status_led:
+    pin: null  # Не используется, так как LED на Arduino
+    mode: "output"
+    description: "LED статуса (через Arduino)"
+    
+  # Пример для будущих расширений
+  button:
+    pin: null
+    mode: "input"
+    pull: "up"
+    description: "Кнопка (если будет добавлена)"
+
+# HDMI дисплей
+display:
+  hdmi:
+    enabled: true
+    resolution: [1920, 1080]
+    description: "HDMI дисплей (основной)"
+
+# Аудио настройки
+audio:
+  sample_rate: 16000
+  chunk_size: 1024
+  channels: 1
+  format: "paInt16"
+  record_duration: 5  # секунды
+
+# Камера настройки
+camera:
+  resolution: [640, 480]
+  fps: 30
+  format: "MJPG"
+
+# Примечания по подключению
+notes: |
+  Схема подключения:
+  
+  PCA9685 (I2C):
+  - VCC -> 5V
+  - GND -> GND
+  - SDA -> GPIO 2 (Pin 3)
+  - SCL -> GPIO 3 (Pin 5)
+  - Адрес: 0x40 (по умолчанию)
+  
+  Сервоприводы к PCA9685:
+  - Голова (pitch) -> Channel 0
+  - Голова (yaw) -> Channel 1
+  - Шея -> Channel 2
+  - Левая рука -> Channel 3
+  - Правая рука -> Channel 4
+  
+  mmWave C1001 (через GPIO UART):
+  - VCC -> 5V или 3.3V (проверьте документацию)
+  - GND -> GND
+  - TX -> GPIO 14 (Pin 8) - TX UART0
+  - RX -> GPIO 15 (Pin 10) - RX UART0
+  - Включите UART: sudo raspi-config -> Interface Options -> Serial Port -> Enable
+  - Проверка: ls /dev/ttyAMA*
+  
+  RGB LED модуль (через GPIO):
+  - Красный -> GPIO 18 (Pin 12) - PWM канал 0
+  - Зеленый -> GPIO 19 (Pin 35) - PWM канал 1
+  - Синий -> GPIO 13 (Pin 33) - PWM канал 2
+  - Общий катод/анод -> GND или VCC (в зависимости от типа LED)
+  - Для WS2812/NeoPixel используйте только data_pin на GPIO 18
+  
+  USB устройства:
+  - Микрофон: автоматическое определение
+  - Динамики: автоматическое определение
+  - Камера: /dev/video0
+

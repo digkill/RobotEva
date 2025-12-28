@@ -3,6 +3,17 @@
 
 echo "Установка RobotEva..."
 
+# Проверка, установлены ли GPIO зависимости
+if [ ! -f "install_gpio.sh" ] || [ ! -x "install_gpio.sh" ]; then
+    echo "Предупреждение: install_gpio.sh не найден или не исполняемый"
+    echo "Рекомендуется сначала запустить: ./install_gpio.sh"
+    read -p "Продолжить без установки GPIO? (y/n): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+fi
+
 # Обновление системы
 echo "Обновление системы..."
 sudo apt-get update
@@ -26,7 +37,9 @@ sudo apt-get install -y \
     python3-opencv \
     git \
     libffi-dev \
-    libssl-dev
+    libssl-dev \
+    swig \
+    liblgpio-dev
 
 # Включение I2C
 echo "Включение I2C..."

@@ -39,13 +39,20 @@
 cd /home/pi/Projects/RobotEva
 ```
 
-2. Установите системные зависимости (обязательно перед установкой Python пакетов):
+2. Установите GPIO зависимости (обязательно для Raspberry Pi):
+```bash
+./install_gpio.sh
+```
+
+Этот скрипт установит все необходимые библиотеки для работы с GPIO, I2C, SPI и сервоприводами.
+
+3. Установите остальные системные зависимости:
 ```bash
 sudo apt-get update
 sudo apt-get install -y portaudio19-dev libportaudio2 libportaudiocpp0 libasound2-dev build-essential
 ```
 
-3. Запустите скрипт установки (рекомендуется):
+4. Запустите скрипт установки (рекомендуется):
 ```bash
 ./setup.sh
 ```
@@ -65,15 +72,15 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-4. Загрузите код на Arduino для LED контроллера:
+5. Загрузите код на Arduino для LED контроллера:
    - Откройте `arduino_led/led_controller.ino` в Arduino IDE
    - Настройте пины RGB LED в соответствии с вашим модулем
    - Загрузите код на Arduino
    - Подключите Arduino к Raspberry Pi через USB
 
-5. Настройте конфигурацию:
+6. Настройте конфигурацию:
 ```bash
-cp config.yaml config.yaml.backup
+cp config.yaml config.yaml.example
 nano config.yaml
 ```
 
@@ -82,7 +89,7 @@ nano config.yaml
 - `ai.openai.api_key` - ключ OpenAI API
 - `ai.grok.api_key` - ключ Grok API
 
-6. Убедитесь, что все устройства подключены и доступны:
+7. Убедитесь, что все устройства подключены и доступны:
 - Проверьте I2C устройства (PCA9685): `i2cdetect -y 1`
 - Проверьте USB устройства: `lsusb`
 - Проверьте последовательные порты: `ls /dev/tty*`
@@ -119,6 +126,25 @@ sudo python3 main.py
 3. Загрузите код на Arduino
 4. Подключите Arduino к Raspberry Pi через USB
 5. Убедитесь, что порт указан правильно в `config.yaml` (по умолчанию: `/dev/ttyACM0`)
+
+## Файлы конфигурации
+
+### gpio_mapping.yaml
+
+Централизованный файл маппинга GPIO и устройств. Содержит:
+- I2C адреса устройств (PCA9685, BME280, LSM6DS)
+- Конфигурацию сервоприводов (каналы, углы)
+- GPIO пины для mmWave C1001 (через UART)
+- GPIO пины для RGB LED модуля (прямое подключение)
+- USB устройства (микрофон, динамики, камера)
+- SPI настройки (дисплей)
+
+**Важно:** mmWave C1001 и RGB LED подключаются через GPIO пины, а не через USB/Serial.
+
+Для проверки маппинга:
+```bash
+python scripts/check_gpio_mapping.py
+```
 
 ## Структура проекта
 
@@ -181,6 +207,23 @@ sudo apt-get install -y portaudio19-dev libportaudio2 libportaudiocpp0 libasound
 pip install pyaudio
 ```
 
+### Ошибка ModuleNotFoundError: No module named 'lgpio'
+
+Для Raspberry Pi 5 требуется библиотека `lgpio`. Установите системные зависимости:
+
+```bash
+sudo apt-get install -y swig liblgpio-dev
+```
+
+Затем установите Python пакет:
+```bash
+pip install lgpio
+```
+
+### Ошибка ImportError: cannot import name 'LSM6DS33'
+
+Если возникает ошибка импорта `LSM6DS33`, это уже исправлено в коде. Убедитесь, что используете последнюю версию кода. Правильное имя класса - `LSM6DS`.
+
 ### Ошибка "externally-managed-environment"
 
 Если получаете ошибку о внешне управляемом окружении, используйте виртуальное окружение:
@@ -191,17 +234,35 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Проблемы с I2C устройствами
+### Проблемы с GPIO/I2C устройствами
 
-Если сервоконтроллер PCA9685 не определяется:
+Если возникают проблемы с GPIO или I2C устройствами:
 
+1. Запустите скрипт установки GPIO:
 ```bash
-# Проверьте подключение
-i2cdetect -y 1
+./install_gpio.sh
+```
 
-# Убедитесь, что I2C включен
+2. Проверьте подключение I2C:
+```bash
+i2cdetect -y 1
+```
+
+3. Убедитесь, что I2C включен:
+```bash
 sudo raspi-config
 # Интерфейсы -> I2C -> Enable
+```
+
+4. Если сервоконтроллер PCA9685 не определяется, проверьте:
+   - Правильность подключения к I2C шине
+   - Адрес устройства (по умолчанию 0x40)
+   - Права доступа к /dev/i2c-1
+
+5. Для проблем с правами доступа к GPIO:
+```bash
+sudo usermod -a -G gpio $USER
+# Требуется перелогиниться
 ```
 
 ### Проблемы с USB устройствами

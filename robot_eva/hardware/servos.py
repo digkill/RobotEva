@@ -20,8 +20,16 @@ class ServoController:
         self.config = config
         self.logger = logging.getLogger(__name__)
         self.kit: Optional[ServoKit] = None
-        self.i2c_address = config.get("hardware.servos.i2c_address", 0x40)
-        self.frequency = config.get("hardware.servos.frequency", 50)
+        
+        # Получение конфигурации из GPIO маппинга
+        pca9685_config = config.get_i2c_device("pca9685")
+        if pca9685_config:
+            self.i2c_address = pca9685_config.get("address", 0x40)
+            self.frequency = pca9685_config.get("frequency", 50)
+        else:
+            # Fallback на старую конфигурацию
+            self.i2c_address = config.get("hardware.servos.i2c_address", 0x40)
+            self.frequency = config.get("hardware.servos.frequency", 50)
         
         # Ограничения углов для каждого сервопривода
         self.angle_limits = {
