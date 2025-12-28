@@ -42,24 +42,51 @@ class AudioManager:
             if self.output_device_index is None:
                 self.output_device_index = self._find_usb_speaker()
             
-            # Открытие потоков
-            self.input_stream = self.audio.open(
-                format=self.format,
-                channels=self.channels,
-                rate=self.sample_rate,
-                input=True,
-                input_device_index=self.input_device_index,
-                frames_per_buffer=self.chunk_size
-            )
+            # Получение поддерживаемых частот дискретизации устройства
+            if self.input_device_index is not None:
+                device_info = self.audio.get_device_info_by_index(self.input_device_index)
+                default_sample_rate = int(device_info.get('defaultSampleRate', self.sample_rate))
+                # Используем поддерживаемую частоту
+                if default_sample_rate != self.sample_rate:
+                    self.logger.info(f"Использование частоты дискретизации устройства: {default_sample_rate} Hz вместо {self.sample_rate} Hz")
+                    self.sample_rate = default_sample_rate
             
-            self.output_stream = self.audio.open(
-                format=self.format,
-                channels=self.channels,
-                rate=self.sample_rate,
-                output=True,
-                output_device_index=self.output_device_index,
-                frames_per_buffer=self.chunk_size
-            )
+            # Открытие потоков с обработкой ошибок sample rate
+            try:
+                self.input_stream = self.audio.open(
+                    format=self.format,
+                    channels=self.channels,
+                    rate=self.sample_rate,
+                    input=True,
+                    input_device_index=self.input_device_index,
+                    frames_per_buffer=self.chunk_size
+                )
+            except Exception as e:
+                # Попробуем стандартную частоту
+                self.logger.warning(f"Ошибка открытия входного потока с частотой {self.sample_rate} Hz: {e}")
+                self.sample_rate = 44100  # Стандартная частота
+                self.logger.info(f"Попытка с частотой {self.sample_rate} Hz")
+                self.input_stream = self.audio.open(
+                    format=self.format,
+                    channels=self.channels,
+                    rate=self.sample_rate,
+                    input=True,
+                    input_device_index=self.input_device_index,
+                    frames_per_buffer=self.chunk_size
+                )
+            
+            try:
+                self.output_stream = self.audio.open(
+                    format=self.format,
+                    channels=self.channels,
+                    rate=self.sample_rate,
+                    output=True,
+                    output_device_index=self.output_device_index,
+                    frames_per_buffer=self.chunk_size
+                )
+            except Exception as e:
+                self.logger.warning(f"Ошибка открытия выходного потока: {e}")
+                self.output_stream = None
             
             self.logger.info(f"Аудио система инициализирована (вход: {self.input_device_index}, выход: {self.output_device_index})")
             

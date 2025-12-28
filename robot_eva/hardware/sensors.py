@@ -54,8 +54,7 @@ class SensorManager:
                 try:
                     if self.mmwave_use_gpio:
                         # Инициализация через GPIO UART
-                        import serial
-                        from serial import Serial
+                        import serial as serial_lib
                         
                         # Определение устройства UART
                         uart_device_map = {
@@ -69,7 +68,7 @@ class SensorManager:
                         
                         uart_device = uart_device_map.get(self.mmwave_uart, "/dev/ttyAMA0")
                         
-                        self.mmwave_serial = serial.Serial(
+                        self.mmwave_serial = serial_lib.Serial(
                             uart_device,
                             self.mmwave_baudrate,
                             timeout=1
@@ -93,15 +92,28 @@ class SensorManager:
                     
                     # BME280 (температура и влажность)
                     try:
-                        self.bme280 = adafruit_bme280.Adafruit_BME280_I2C(i2c)
+                        # Попробуем разные варианты импорта
+                        try:
+                            from adafruit_bme280 import basic as adafruit_bme280_basic
+                            self.bme280 = adafruit_bme280_basic.Adafruit_BME280_I2C(i2c)
+                        except (ImportError, AttributeError):
+                            # Старый API
+                            self.bme280 = adafruit_bme280.Adafruit_BME280_I2C(i2c)
                         self.logger.info("BME280 (температура/влажность) инициализирован")
                     except Exception as e:
                         self.logger.warning(f"Не удалось инициализировать BME280: {e}")
                     
                     # LSM6DS (гироскоп/акселерометр)
                     try:
-                        self.lsm6ds = LSM6DS(i2c)
-                        self.logger.info("LSM6DS (гироскоп/акселерометр) инициализирован")
+                        # LSM6DS - это базовый класс, нужно использовать конкретную реализацию
+                        try:
+                            from adafruit_lsm6ds.lsm6ds33 import LSM6DS33
+                            self.lsm6ds = LSM6DS33(i2c)
+                            self.logger.info("LSM6DS33 (гироскоп/акселерометр) инициализирован")
+                        except (ImportError, AttributeError):
+                            # Попробуем другой вариант
+                            self.lsm6ds = LSM6DS(i2c)
+                            self.logger.info("LSM6DS (гироскоп/акселерометр) инициализирован")
                     except Exception as e:
                         self.logger.warning(f"Не удалось инициализировать LSM6DS: {e}")
                 

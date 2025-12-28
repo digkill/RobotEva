@@ -2,6 +2,7 @@
 Обнаружение wake word через Porcupine
 """
 import logging
+import os
 import pvporcupine
 from pvrecorder import PvRecorder
 import asyncio
@@ -27,6 +28,18 @@ class WakeWordDetector:
     
     async def initialize(self):
         """Инициализация детектора wake word"""
+        if not self.access_key:
+            self.logger.warning("Porcupine access key не установлен, wake word детектор отключен")
+            self.porcupine = None
+            self.recorder = None
+            return
+        
+        if not os.path.exists(self.model_path):
+            self.logger.warning(f"Файл модели wake word не найден: {self.model_path}")
+            self.porcupine = None
+            self.recorder = None
+            return
+        
         try:
             self.porcupine = pvporcupine.create(
                 access_key=self.access_key,
@@ -41,8 +54,10 @@ class WakeWordDetector:
             self.logger.info("Wake word детектор инициализирован")
             
         except Exception as e:
-            self.logger.error(f"Ошибка инициализации wake word детектора: {e}")
-            raise
+            self.logger.warning(f"Ошибка инициализации wake word детектора: {e}")
+            self.logger.warning("Wake word детектор отключен, робот будет работать без активации по голосу")
+            self.porcupine = None
+            self.recorder = None
     
     async def detect(self) -> bool:
         """

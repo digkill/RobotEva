@@ -51,16 +51,46 @@ class ServoController:
     
     async def initialize(self):
         """Инициализация контроллера сервоприводов"""
+        # Проверка доступности I2C устройства
+        if not await self._check_i2c_device():
+            self.logger.warning("PCA9685 не обнаружен на I2C шине. Продолжение без сервоприводов.")
+            self.kit = None
+            return
+        
         try:
             self.kit = ServoKit(channels=16, address=self.i2c_address, frequency=self.frequency)
-            self.logger.info("Сервоконтроллер PCA9685 инициализирован")
+            self.logger.info(f"Сервоконтроллер PCA9685 инициализирован (адрес: 0x{self.i2c_address:02X})")
             
             # Установка начальных позиций
             await self.reset_to_center()
             
+        except BlockingIOError as e:
+            self.logger.warning(f"I2C шина занята или устройство недоступно: {e}")
+            self.logger.warning("Продолжение без сервоприводов. Проверьте подключение PCA9685.")
+            self.kit = None
         except Exception as e:
-            self.logger.error(f"Ошибка инициализации сервоконтроллера: {e}")
-            raise
+            self.logger.warning(f"Ошибка инициализации сервоконтроллера: {e}")
+            self.logger.warning("Продолжение без сервоприводов.")
+            self.kit = None
+    
+    async def _check_i2c_device(self) -> bool:
+        """Проверка наличия устройства на I2C шине"""
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["i2cdetect", "-y", "1"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                # Поиск адреса в выводе
+                address_str = f"{self.i2c_address:02x}"
+                return address_str in result.stdout.lower()
+            return False
+        except Exception as e:
+            self.logger.debug(f"Не удалось проверить I2C устройство: {e}")
+            return False
     
     async def move(self, servo_id: int, angle: float, duration: float = 0.5):
         """
@@ -72,7 +102,7 @@ class ServoController:
             duration: Время движения в секундах
         """
         if self.kit is None:
-            self.logger.warning("Сервоконтроллер не инициализирован")
+            self.logger.debug("Сервоконтроллер не инициализирован, команда игнорируется")
             return
         
         # Ограничение угла
