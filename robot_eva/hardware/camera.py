@@ -2,6 +2,7 @@
 Управление USB камерой
 """
 import logging
+import asyncio
 import cv2
 import numpy as np
 from typing import Optional, Tuple
@@ -20,6 +21,7 @@ class CameraManager:
         
         self.camera: Optional[cv2.VideoCapture] = None
         self.is_available_flag = False
+        self._lock = asyncio.Lock()
     
     async def initialize(self):
         """Инициализация камеры"""
@@ -53,10 +55,11 @@ class CameraManager:
             return None
         
         try:
-            ret, frame = self.camera.read()
-            if ret:
-                return frame
-            return None
+            async with self._lock:
+                ret, frame = self.camera.read()
+                if ret:
+                    return frame
+                return None
         except Exception as e:
             self.logger.error(f"Ошибка захвата кадра: {e}")
             return None

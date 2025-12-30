@@ -82,6 +82,77 @@ ANIMATIONS = {
             {"type": "mouth", "x": 0, "y": 65, "shape": "line", "width": 50},
         ]
     },
+    "sleep": {
+        "frames": 60,
+        "loop": True,
+        "elements": [
+            # closed eyes + calm mouth
+            {"type": "eye_left", "x": -46, "y": -10, "shape": "line", "width": 70},
+            {"type": "eye_right", "x": 46, "y": -10, "shape": "line", "width": 70},
+            # Snore mouth (will "breathe" in get_animation_frame)
+            {"type": "mouth", "x": 0, "y": 68, "shape": "ellipse", "width": 34, "height": 10},
+            # "ZzZ" overlay (top-right-ish)
+            {"type": "text", "text": "ZzZ", "x": 70, "y": -85, "size": 26, "anchor": "mm", "color": (210, 210, 255)},
+            # small drifting z near mouth (snore)
+            {"type": "text", "text": "z", "x": 35, "y": 40, "size": 18, "anchor": "mm", "color": (180, 180, 230)},
+        ],
+    },
+    "wink": {
+        "frames": 18,
+        "loop": False,
+        "elements": [
+            {"type": "eye_left", "x": -46, "y": -20, "shape": "line", "width": 70},
+            {"type": "eye_right", "x": 46, "y": -20, "shape": "ellipse", "width": 70, "height": 55},
+            {"type": "mouth", "x": 0, "y": 55, "shape": "arc", "start": 20, "end": 160, "radius": 42},
+        ],
+    },
+    "play": {
+        "frames": 22,
+        "loop": True,
+        "elements": [
+            {"type": "eye_left", "x": -46, "y": -22, "shape": "ellipse", "width": 78, "height": 50},
+            {"type": "eye_right", "x": 46, "y": -18, "shape": "ellipse", "width": 68, "height": 58},
+            {"type": "mouth", "x": 0, "y": 55, "shape": "arc", "start": 20, "end": 160, "radius": 45},
+            {"type": "text", "text": "!", "x": 75, "y": -70, "size": 34, "anchor": "mm", "color": (255, 255, 255)},
+        ],
+    },
+    "game": {
+        "frames": 24,
+        "loop": True,
+        "elements": [
+            # slightly “focused” eyes
+            {"type": "eye_left", "x": -46, "y": -22, "shape": "ellipse", "width": 70, "height": 42},
+            {"type": "eye_right", "x": 46, "y": -22, "shape": "ellipse", "width": 70, "height": 42},
+            {"type": "mouth", "x": 0, "y": 60, "shape": "line", "width": 35},
+            {"type": "text", "text": "GO", "x": 70, "y": -78, "size": 24, "anchor": "mm", "color": (220, 255, 220)},
+        ],
+    },
+    "love": {
+        "frames": 20,
+        "loop": True,
+        "elements": [
+            # Red eyes + heart pupils (text overlays) with pulse
+            {"type": "eye_left", "x": -46, "y": -20, "shape": "ellipse", "width": 74, "height": 46, "color": (255, 60, 80)},
+            {"type": "eye_right", "x": 46, "y": -20, "shape": "ellipse", "width": 74, "height": 46, "color": (255, 60, 80)},
+            {"type": "mouth", "x": 0, "y": 55, "shape": "arc", "start": 20, "end": 160, "radius": 45},
+            # Heart pupils inside the eyes
+            {"type": "text", "text": "♥", "x": -46, "y": -20, "size": 34, "anchor": "mm", "color": (255, 30, 70)},
+            {"type": "text", "text": "♥", "x": 46, "y": -20, "size": 34, "anchor": "mm", "color": (255, 30, 70)},
+            # Floating hearts around
+            {"type": "text", "text": "♥", "x": -78, "y": -82, "size": 22, "anchor": "mm", "color": (255, 120, 160)},
+            {"type": "text", "text": "♥", "x": 78, "y": -78, "size": 20, "anchor": "mm", "color": (255, 140, 180)},
+        ],
+    },
+    "angry": {
+        "frames": 20,
+        "loop": True,
+        "elements": [
+            {"type": "eye_left", "x": -46, "y": -22, "shape": "ellipse", "width": 72, "height": 36},
+            {"type": "eye_right", "x": 46, "y": -22, "shape": "ellipse", "width": 72, "height": 36},
+            {"type": "mouth", "x": 0, "y": 63, "shape": "arc", "start": 200, "end": 340, "radius": 38},
+            {"type": "text", "text": "!!", "x": 72, "y": -70, "size": 24, "anchor": "mm", "color": (255, 255, 255)},
+        ],
+    },
     "confused": {
         "frames": 20,
         "loop": True,
@@ -91,12 +162,24 @@ ANIMATIONS = {
             {"type": "mouth", "x": 0, "y": 60, "shape": "line", "width": 30},
         ]
     },
+    "ahegao": {
+        "frames": 22,
+        "loop": True,
+        "elements": [
+            # Pink-ish eyes with X pupils
+            {"type": "eye_left", "x": -46, "y": -20, "shape": "ellipse", "width": 74, "height": 50, "color": (255, 120, 180)},
+            {"type": "eye_right", "x": 46, "y": -20, "shape": "ellipse", "width": 74, "height": 50, "color": (255, 120, 180)},
+            {"type": "text", "text": "X", "x": -46, "y": -20, "size": 38, "anchor": "mm", "color": (255, 255, 255)},
+            {"type": "text", "text": "X", "x": 46, "y": -20, "size": 38, "anchor": "mm", "color": (255, 255, 255)},
+            # Open mouth + tongue hint
+            {"type": "mouth", "x": 0, "y": 62, "shape": "ellipse", "width": 62, "height": 46},
+            {"type": "text", "text": ":P", "x": 0, "y": 70, "size": 26, "anchor": "mm", "color": (255, 120, 160)},
+            # Blush
+            {"type": "text", "text": "///", "x": -88, "y": 0, "size": 22, "anchor": "mm", "color": (255, 120, 160)},
+            {"type": "text", "text": "///", "x": 88, "y": 0, "size": 22, "anchor": "mm", "color": (255, 120, 160)},
+        ],
+    },
 }
-
-
-# Частота моргания: делаем в ~3 раза реже (≈ раз в 2.4 сек при 12.5 FPS).
-BLINK_PERIOD_FRAMES = 30
-BLINK_DURATION_FRAMES = 2
 
 
 def get_animation_frame(emotion: str, absolute_frame_idx: int) -> Dict:
@@ -115,8 +198,6 @@ def get_animation_frame(emotion: str, absolute_frame_idx: int) -> Dict:
 
     frame = {"frame": local_idx, "elements": []}
 
-    do_blink = (int(absolute_frame_idx) % BLINK_PERIOD_FRAMES) < BLINK_DURATION_FRAMES
-
     for element in elements:
         animated_element = element.copy()
         et = element.get("type")
@@ -126,14 +207,42 @@ def get_animation_frame(emotion: str, absolute_frame_idx: int) -> Dict:
             animated_element["pupil_dx"] = math.sin(progress * 2 * math.pi) * 4
             animated_element["pupil_dy"] = math.cos(progress * 2 * math.pi) * 2
 
-            # blink: squeeze to a line for a couple of frames (если это не sleepy-форма)
-            if do_blink and element.get("shape") != "line":
-                animated_element["shape"] = "line"
-                animated_element["width"] = element.get("width", 70)
-
         elif et == "mouth":
             # subtle mouth wobble
             animated_element["y"] = element.get("y", 55) + math.sin(progress * 2 * math.pi) * 2
+            # Special: snore/breathing effect for sleep
+            if emotion.lower() == "sleep" and element.get("shape") == "ellipse":
+                base_h = float(element.get("height", 10))
+                # open/close between ~6..(base_h+10)
+                breathe = (math.sin(progress * 2 * math.pi) + 1.0) / 2.0  # 0..1
+                animated_element["height"] = 6 + breathe * (base_h + 10)
+            # Special: ahegao mouth pulse
+            if emotion.lower() == "ahegao" and element.get("shape") == "ellipse":
+                try:
+                    base_h = float(element.get("height", 46))
+                except Exception:
+                    base_h = 46.0
+                pulse = (math.sin(progress * 2 * math.pi) + 1.0) / 2.0
+                animated_element["height"] = base_h + pulse * 10.0
+
+        elif et == "text":
+            # subtle floating for overlays
+            amp = 3
+            if emotion.lower() == "sleep":
+                # make "ZzZ"/"z" drift a bit more while sleeping
+                amp = 5
+            animated_element["y"] = element.get("y", 0) + math.sin(progress * 2 * math.pi) * amp
+
+            # Special: pulse hearts in LOVE emotion
+            if emotion.lower() == "love":
+                txt = str(element.get("text", "") or "")
+                if "♥" in txt or "<3" in txt:
+                    try:
+                        base_size = float(element.get("size", 24))
+                    except Exception:
+                        base_size = 24.0
+                    pulse = (math.sin(progress * 2 * math.pi) + 1.0) / 2.0  # 0..1
+                    animated_element["size"] = base_size + (pulse * 6.0)
 
         frame["elements"].append(animated_element)
 

@@ -2,10 +2,25 @@
 
 # Настройки железа
 hardware:
-  # Сервоприводы через PCA9685
+  # Сервоприводы
   servos:
+    # backend:
+    # - pca9685: управление через I2C контроллер PCA9685 (ServoKit)
+    # - mqtt: команды сервоприводов отправляются по MQTT на ESP32 (Wroom-32)
+    backend: pca9685
     i2c_address: 0x40
     frequency: 50
+    # --- MQTT -> ESP32 ---
+    # mqtt:
+    #   enabled: true
+    #   host: localhost
+    #   port: 1883
+    #   username: ""
+    #   password: ""
+    #   client_id: "eva-servo-publisher"
+    #   topic_base: "robot_eva/servos"
+    #   qos: 0
+    #   retain: false
   
   # Дисплеи
   display:
@@ -24,8 +39,15 @@ hardware:
     sample_rate: 16000
     chunk_size: 1024
     channels: 1
+    # Important for wake word: if enabled, we don't keep mic open all the time (avoids PvRecorder conflicts)
+    lazy_input: true
+    # Don't keep output open permanently (avoids "Device or resource busy" during tests / restarts)
+    lazy_output: true
     input_device: null  # Автоматический поиск USB микрофона
-    output_device: null  # Автоматический поиск USB динамика
+    # Output device can be an int (PyAudio index) or a string (name substring). On Desktop/PipeWire use "pulse".
+    output_device: "pulse"
+    # For PipeWire/Pulse: prefer `aplay -D pulse` (better resampling quality, less "robotic/cartoonish" artifacts)
+    prefer_aplay_on_pulse: true
     record_duration: 5
   
   # Камера
@@ -52,6 +74,19 @@ hardware:
 
 # Настройки AI
 ai:
+  # Язык (одним местом): влияет на STT (Whisper), на язык ответов Grok и на язык описания камеры
+  # ru / en / th
+  language:
+    default: ru
+
+  # Base LLM system prompt (Eva personality / rules / style)
+  # Response language is still controlled by ai.language.default.
+  llm:
+    system_prompt: |
+      Ты Eva — дружелюбный робот-ассистент.
+      Ты помогаешь пользователю: умный дом, поиск информации, медиа, бытовые вопросы.
+      Будь вежливой, дружелюбной и полезной. Отвечай кратко и по делу.
+
   # Wake word (OpenWakeWord, офлайн)
   wake_word:
     openwakeword:
@@ -71,27 +106,72 @@ ai:
   # Распознавание речи
   speech_to_text:
     model: whisper-1
+    # ru / en / th / auto (auto = без подсказки языка)
     language: ru
   
   # Синтез речи
   text_to_speech:
     model: tts-1
+    # Try "alloy" for the most neutral voice. If it sounds too bright, try "onyx".
     voice: alloy  # alloy, echo, fable, onyx, nova, shimmer
-    speed: 1.0
+    # Lower = slower (0.25..4.0)
+    speed: 0.75
   
   # Компьютерное зрение
   vision:
-    model: gpt-4-vision-preview
+    # gpt-4-vision-preview deprecated -> use a modern multimodal model
+    model: gpt-4o-mini
     max_tokens: 300
   
   # Grok API (LLM)
   grok:
     api_key: ""  # Ваш Grok API ключ
     api_url: https://api.x.ai/v1/chat/completions
-    model: grok-beta
+    model: grok-3
     temperature: 0.7
     max_tokens: 1000
     max_history: 10
+
+# Тонкая настройка лица (сдвиги по Y, в “единицах анимации”; +Y = ниже)
+emotions:
+  face:
+    # Глаза чуть ниже
+    eye_y_offset: 4
+    # Рот чуть выше
+    mouth_y_offset: -4
+
+  # Моргание (случайные интервалы, чтобы выглядело “живее”)
+  blink:
+    # Минимальный/максимальный интервал между морганиями в кадрах (12.5 FPS)
+    min_interval_frames: 90
+    max_interval_frames: 180
+    # Сколько кадров держать “закрытые” глаза
+    duration_frames: 2
+
+  # Speaking overlay (mouth movement while Eva is talking)
+  speaking:
+    enabled: true
+    # Mouth open/close period in animation frames (~12.5 FPS). Lower = faster lip movement.
+    period_frames: 2
+    # Mouth geometry when open
+    open_width: 52
+    open_height: 34
+    # Mouth geometry when closed
+    closed_width: 58
+
+# Сеть / прокси (если сайты/поиск/LLM ловят 403)
+network:
+  proxy:
+    enabled: false
+    # Один URL применяется к http/https. Для SOCKS5 с DNS через прокси используйте socks5h://
+    url: "socks5h://USER:PASS@HOST:1080"
+    # Альтернатива: раздельно
+    # http: "http://USER:PASS@HOST:3128"
+    # https: "http://USER:PASS@HOST:3128"
+  http:
+    timeout_seconds: 30
+    retries: 2
+    retry_backoff: 0.6
 
 # Сервисы
 services:
@@ -126,4 +206,147 @@ services:
     music_path: /home/pi/Music
     youtube:
       enabled: true
+
+# Поведение (жесты/движения серв)
+behavior:
+  # Dialogue mode: after Eva speaks, she will listen for a reply and continue without wake word.
+  dialogue:
+    enabled: true
+    # How long to record for each follow-up turn (seconds)
+    listen_duration: 5
+    # Maximum follow-up turns after one user command
+    max_turns: 3
+    # If no speech recognized, exit dialogue quietly (no "не расслышала")
+    silent_on_no_speech: true
+  gestures:
+    # Master switch and throttling for vision-based gestures (to avoid constant OpenAI calls).
+    enabled: true
+    # If >0, gestures are checked only for N seconds after last interaction (wake word / user speech / idle chat).
+    active_window_seconds: 30
+    heart:
+      enabled: false
+      # How often to check camera for the gesture (uses OpenAI Vision)
+      interval_seconds: 2.0
+      # Require N consecutive HEART detections to trigger
+      consecutive_hits: 2
+      # Cooldown after bringing up love animation (seconds)
+      debounce_seconds: 12.0
+      # Keep responses tiny
+      max_tokens: 8
+      # Optional phrase to say when triggered
+      tts_phrase: "Я тоже тебя люблю!"
+      # How long to keep love animation before returning to neutral
+      display_duration_seconds: 6.0
+    gun:
+      enabled: false
+      interval_seconds: 2.0
+      consecutive_hits: 2
+      debounce_seconds: 10.0
+      max_tokens: 8
+      right_arm_angle: 40
+      right_arm_duration_seconds: 0.9
+      tts_phrase: "пиф пфф"
+      display_duration_seconds: 4.0
+  # Face tracking: detect face and turn head to follow it
+  face_tracking:
+    enabled: false
+    # FPS of tracking loop (higher = more responsive, more CPU)
+    fps: 8
+    # Pause tracking while speaking (recommended to avoid fighting speaking gestures)
+    pause_while_speaking: true
+    # If no face seen for this long, return head to center
+    return_to_center_seconds: 2.0
+    # Detection tuning
+    scale_factor: 1.2
+    min_neighbors: 5
+    # Small deadzone around center (0..1)
+    deadzone: 0.07
+    # Smoothness: 0..0.95 (higher = smoother, slower response)
+    smoothing_alpha: 0.75
+    # Servo limits (degrees away from center)
+    max_yaw_deg: 25
+    max_pitch_deg: 15
+    # Invert directions if your wiring/mounting is reversed
+    invert_yaw: false
+    invert_pitch: true
+    # Smoothing when moving servos
+    smooth_steps: 3
+    smooth_delay: 0.02
+    # Debug logs (print face counts + target angles)
+    debug: false
+    # Log when a face is detected and target yaw/pitch (throttled)
+    log_on_face_detected: true
+    debug_log_interval_seconds: 2.0
+    # Minimum face size in pixels (lower helps detect faces farther away)
+    min_face_size_px: 30
+  startup_greeting:
+    enabled: true
+    # Можно указать эмоцию, которая включится на время приветствия (например: happy)
+    emotion: happy
+    # Посмотреть в камеру и сказать, что Ева видит (через OpenAI Vision)
+    describe_camera:
+      enabled: true
+      timeout_seconds: 10
+    phrases:
+      - "Привет! Я Ева."
+      - "Привет, я Ева. Я на связи."
+      - "Хэй! Ева здесь."
+      - "Привет! Готова помочь."
+      - "Привет! Чем займёмся?"
+  # Автодиалог: Ева сама говорит и затем слушает ответ (без wake word)
+  idle_chat:
+    enabled: false
+    interval_seconds: [180, 420]
+    require_human_detected: false
+    listen_duration: 5
+    prompts:
+      - "Скучно. Поговорим?"
+      - "Как дела? Что нового?"
+      - "Хочешь, расскажу что-нибудь интересное?"
+      - "Я тут подумала… о чём поговорим?"
+      - "Есть вопрос: что тебе сейчас нужно?"
+  motion:
+    enabled: true
+    # Возврат в центр при остановке
+    reset_on_stop: true
+    # Движения "сам захотел" (idle)
+    idle:
+      enabled: true
+      # Пауза между автодвижениями (сек). Можно [min,max]
+      interval_seconds: [8, 16]
+    # Движения во время произнесения ответа
+    speaking:
+      enabled: true
+      # Extra arm movement while speaking
+      arms:
+        enabled: true
+        # Probability of an arm gesture each speaking tick (0..1)
+        chance: 0.55
+        # Max arm offset (degrees) relative to configured center/range
+        amplitude: 10
+    # Одноразовые жесты на смену эмоции (happy/sad/confused/etc)
+    emotion:
+      enabled: true
+    # Центры (градусы)
+    center:
+      head_pitch: 90
+      head_yaw: 90
+      neck_pitch: 90
+      left_arm: 90
+      right_arm: 90
+    # Максимальная амплитуда относительно центра (градусы)
+    range:
+      head_pitch: 15
+      head_yaw: 25
+      neck_pitch: 10
+      left_arm: 20
+      right_arm: 20
+
+  # Watchdog: перезапуск процесса если робот завис (например, stuck listening)
+  watchdog:
+    enabled: true
+    check_interval_seconds: 2
+    stuck_listening_seconds: 25
+    no_heartbeat_seconds: 60
+    restart_delay_seconds: 1.5
 

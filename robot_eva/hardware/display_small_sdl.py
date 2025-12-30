@@ -92,3 +92,4 @@ class SmallSdlDisplay(SmallDisplayBase):
         self._window_size = None
 
 
+

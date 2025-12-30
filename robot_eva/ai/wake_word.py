@@ -33,6 +33,8 @@ class WakeWordDetector:
         self.oww_debounce_seconds = float(config.get("ai.wake_word.openwakeword.debounce_seconds", 1.2))
         self.oww_frame_length = int(config.get("ai.wake_word.openwakeword.frame_length", 1280))
         self.oww_models = config.get("ai.wake_word.openwakeword.models", ["hey_jarvis"]) or ["hey_jarvis"]
+        # PvRecorder device index. If not set, will fall back to hardware.audio.input_device (webcam mic).
+        self.oww_device_index = config.get("ai.wake_word.openwakeword.device_index", None)
         self.hey_eva_classifier_path = str(
             config.get("ai.wake_word.openwakeword.classifier_path", "/home/pi/Projects/RobotEva/models/openwakeword/hey_eva_classifier.pkl")
         )
@@ -68,16 +70,25 @@ class WakeWordDetector:
             except Exception:
                 pass
 
-            def _download(url: str, dest: str):
+            async def _download(url: str, dest: str):
                 if os.path.exists(dest):
                     return
-                import requests
-                r = requests.get(url, stream=True, timeout=60)
-                r.raise_for_status()
-                with open(dest, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=1024 * 256):
-                        if chunk:
-                            f.write(chunk)
+
+                from ..utils.http_client import create_requests_session
+
+                http = create_requests_session(self.config)
+                timeout = float(self.config.get("network.http.timeout_seconds", 60))
+
+                def _do():
+                    r = http.get(url, stream=True, timeout=timeout)
+                    r.raise_for_status()
+                    with open(dest, "wb") as f:
+                        for chunk in r.iter_content(chunk_size=1024 * 256):
+                            if chunk:
+                                f.write(chunk)
+
+                # Run download in a thread so we don't block the asyncio loop.
+                await asyncio.to_thread(_do)
 
             # Ensure required feature models exist for ONNX framework
             # (openwakeword wheel doesn't ship resources/models/*)
@@ -88,7 +99,7 @@ class WakeWordDetector:
                     info = feature_map.get(key) or {}
                     url = (info.get("download_url") or "").replace(".tflite", ".onnx")
                     if url:
-                        _download(url, target)
+                        await _download(url, target)
             except Exception as e:
                 raise RuntimeError(f"OpenWakeWord: failed to download feature models: {e}") from e
 
@@ -117,7 +128,7 @@ class WakeWordDetector:
                     filename = os.path.basename(url)
                     dest = os.path.join(cache_dir, filename)
                     if not os.path.exists(dest):
-                        _download(url, dest)
+                        await _download(url, dest)
                     model_paths.append(dest)
                     continue
 
@@ -146,7 +157,29 @@ class WakeWordDetector:
                 )
 
             # PvRecorder is a solid 16kHz mono source; openwakeword likes multiples of 1280 samples (80ms)
-            self.recorder = PvRecorder(device_index=-1, frame_length=self.oww_frame_length)
+            device_index = None
+            try:
+                if self.oww_device_index is not None:
+                    device_index = int(self.oww_device_index)
+                else:
+                    # Align with AudioManager mic selection when possible.
+                    mic_idx = self.config.get("hardware.audio.input_device", None)
+                    if mic_idx is not None:
+                        device_index = int(mic_idx)
+            except Exception:
+                device_index = None
+
+            try:
+                devs = PvRecorder.get_available_devices()
+                if devs:
+                    self.logger.info(f"Wake word: PvRecorder devices ({len(devs)}): {devs}")
+            except Exception:
+                pass
+
+            if device_index is None:
+                device_index = -1
+            self.logger.info(f"Wake word: PvRecorder using device_index={device_index}")
+            self.recorder = PvRecorder(device_index=device_index, frame_length=self.oww_frame_length)
             self.logger.info("Wake word: OpenWakeWord backend активирован")
         except Exception as e:
             self.logger.warning(f"OpenWakeWord backend не запустился: {e}")

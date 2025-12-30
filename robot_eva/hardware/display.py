@@ -10,6 +10,7 @@
 import asyncio
 import logging
 import os
+import random
 from typing import Optional, Tuple
 
 import pygame
@@ -41,6 +42,20 @@ class DisplayManager:
 
         self.current_animation: Optional[str] = None
         self.animation_task: Optional[asyncio.Task] = None
+
+        # Speaking overlay (mouth animation while robot is talking)
+        self._speaking: bool = False
+
+    async def set_speaking(self, is_speaking: bool) -> None:
+        """Enable/disable speaking overlay animation (mouth movement)."""
+        self._speaking = bool(is_speaking)
+        # Ensure animation loop is running so the mouth can animate.
+        if self._speaking:
+            try:
+                if not self.current_animation or self.animation_task is None or self.animation_task.done():
+                    await self.show_animation("neutral")
+            except Exception:
+                pass
 
     async def initialize(self):
         """Инициализация дисплеев"""
@@ -89,19 +104,49 @@ class DisplayManager:
         from ..emotions.animations import get_animation_frame, get_animation_info
 
         try:
-            info = get_animation_info(animation_name)
+            active_name = animation_name
+            info = get_animation_info(active_name)
             loop = bool(info.get("loop", True))
             num_frames = int(info.get("frames", 1)) or 1
 
-            frame_index = 0  # absolute counter (needed for stable blink rate)
-            while self.current_animation == animation_name:
-                if not loop and frame_index >= num_frames:
-                    # одноразовая анимация завершена — возвращаемся в нейтраль
-                    self.current_animation = "neutral"
+            # Random blink scheduler (more natural & less predictable)
+            blink_min = int(self.config.get("emotions.blink.min_interval_frames", 90))  # ~7.2s at 12.5fps
+            blink_max = int(self.config.get("emotions.blink.max_interval_frames", 180))  # ~14.4s
+            blink_duration = int(self.config.get("emotions.blink.duration_frames", 2))
+            blink_min = max(10, blink_min)
+            blink_max = max(blink_min, blink_max)
+            blink_duration = max(1, blink_duration)
+
+            next_blink_at = random.randint(blink_min, blink_max)
+            blink_remaining = 0
+
+            frame_index = 0  # absolute counter
+            while True:
+                # Stop if someone changed the animation externally.
+                if self.current_animation != active_name:
                     break
 
-                frame = get_animation_frame(animation_name, frame_index)
-                await self._draw_frame(frame)
+                if not loop and frame_index >= num_frames:
+                    # One-shot animation finished -> transition to neutral WITHOUT stopping the render loop.
+                    active_name = "neutral"
+                    self.current_animation = "neutral"
+                    info = get_animation_info(active_name)
+                    loop = bool(info.get("loop", True))
+                    num_frames = int(info.get("frames", 1)) or 1
+                    continue
+
+                frame = get_animation_frame(active_name, frame_index)
+                blink_active = False
+                if blink_remaining > 0:
+                    blink_active = True
+                    blink_remaining -= 1
+                elif frame_index >= next_blink_at:
+                    blink_remaining = blink_duration
+                    next_blink_at = frame_index + random.randint(blink_min, blink_max)
+                    blink_active = True
+                    blink_remaining -= 1
+
+                await self._draw_frame(frame, blink_active=blink_active, absolute_frame_idx=frame_index)
                 frame_index += 1
                 await asyncio.sleep(0.08)  # ~12.5 FPS
         except asyncio.CancelledError:
@@ -109,9 +154,71 @@ class DisplayManager:
         except Exception as e:
             self.logger.error(f"Ошибка в анимации: {e}", exc_info=True)
 
-    async def _draw_frame(self, frame_data: dict):
+    async def _draw_frame(self, frame_data: dict, blink_active: bool = False, absolute_frame_idx: Optional[int] = None):
         # Рендерим один раз в PIL и отдаем в оба выхода
         # (чтобы визуал был одинаковый “под Eilik”)
+        # Глобальные сдвиги элементов лица (в условных единицах анимации, до масштабирования)
+        # Положительный y_offset -> ниже на экране.
+        try:
+            eye_y_offset = float(self.config.get("emotions.face.eye_y_offset", 0.0))
+        except Exception:
+            eye_y_offset = 0.0
+        try:
+            mouth_y_offset = float(self.config.get("emotions.face.mouth_y_offset", 0.0))
+        except Exception:
+            mouth_y_offset = 0.0
+
+        if isinstance(frame_data, dict):
+            # Always attach offsets (even 0.0) so behavior is predictable.
+            frame_data = dict(frame_data)  # don't mutate upstream
+            frame_data["_face_offsets"] = {"eye_y": eye_y_offset, "mouth_y": mouth_y_offset}
+
+            # Apply blink by forcing eyes into "line" shape for a few frames (if not already sleepy)
+            if blink_active:
+                els = frame_data.get("elements")
+                if isinstance(els, list):
+                    new_els = []
+                    for e in els:
+                        if isinstance(e, dict) and e.get("type") in ("eye_left", "eye_right") and e.get("shape") != "line":
+                            ee = dict(e)
+                            ee["shape"] = "line"
+                            ee["width"] = e.get("width", 70)
+                            new_els.append(ee)
+                        else:
+                            new_els.append(e)
+                    frame_data["elements"] = new_els
+
+            # Speaking overlay: animate mouth while robot is talking.
+            # This is intentionally simple (open/close), but looks much more "alive".
+            if self._speaking and bool(self.config.get("emotions.speaking.enabled", True)):
+                els = frame_data.get("elements")
+                if isinstance(els, list):
+                    period = int(self.config.get("emotions.speaking.period_frames", 2))  # ~6.25 Hz at 12.5fps
+                    period = max(1, period)
+                    idx = int(absolute_frame_idx) if absolute_frame_idx is not None else int(frame_data.get("frame", 0))
+                    mouth_open = ((idx // period) % 2) == 0
+
+                    open_w = float(self.config.get("emotions.speaking.open_width", 52))
+                    open_h = float(self.config.get("emotions.speaking.open_height", 34))
+                    closed_w = float(self.config.get("emotions.speaking.closed_width", 58))
+
+                    new_els = []
+                    for e in els:
+                        if isinstance(e, dict) and e.get("type") == "mouth":
+                            ee = dict(e)
+                            # Preserve x/y, but override shape params to emulate talking.
+                            if mouth_open:
+                                ee["shape"] = "ellipse"
+                                ee["width"] = open_w
+                                ee["height"] = open_h
+                            else:
+                                ee["shape"] = "line"
+                                ee["width"] = closed_w
+                            new_els.append(ee)
+                        else:
+                            new_els.append(e)
+                    frame_data["elements"] = new_els
+
         pil_small = render_face_frame(frame_data, self.small_display_size)
         pil_hdmi = render_face_frame(frame_data, self.hdmi_display_size)
 

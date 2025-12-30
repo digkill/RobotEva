@@ -153,3 +153,4 @@ class SmallFbdevDisplay(SmallDisplayBase):
         self._fb = None
 
 
+

@@ -6,6 +6,8 @@ import openai
 import asyncio
 from typing import Optional
 
+from ..utils.http_client import create_httpx_client
+
 
 class TextToSpeech:
     """Сервис синтеза речи"""
@@ -17,11 +19,21 @@ class TextToSpeech:
         self.api_key = config.get("ai.openai.api_key", "")
         self.model = config.get("ai.text_to_speech.model", "tts-1")
         self.voice = config.get("ai.text_to_speech.voice", "alloy")  # alloy, echo, fable, onyx, nova, shimmer
-        self.speed = config.get("ai.text_to_speech.speed", 1.0)
+        # OpenAI TTS speed: 0.25..4.0
+        try:
+            self.speed = float(config.get("ai.text_to_speech.speed", 1.0))
+        except Exception:
+            self.speed = 1.0
+        self.speed = max(0.25, min(4.0, self.speed))
         
         self.client = None
         if self.api_key:
-            self.client = openai.OpenAI(api_key=self.api_key)
+            # OpenAI SDK uses httpx under the hood; pass a proxy-aware http_client.
+            try:
+                self.client = openai.OpenAI(api_key=self.api_key, http_client=create_httpx_client(config))
+            except TypeError:
+                # Fallback for older SDK versions
+                self.client = openai.OpenAI(api_key=self.api_key)
     
     async def initialize(self):
         """Инициализация сервиса"""
@@ -38,7 +50,7 @@ class TextToSpeech:
             text: Текст для синтеза
             
         Returns:
-            Аудио данные в формате MP3
+            Аудио данные в формате WAV (bytes)
         """
         if not self.api_key:
             self.logger.warning("OpenAI API ключ не установлен")
@@ -50,13 +62,20 @@ class TextToSpeech:
         try:
             if not self.client:
                 return None
+
+            self.logger.info(
+                f"TTS request: model={self.model} voice={self.voice} speed={self.speed} text_len={len(text)}"
+            )
             
             # Вызов OpenAI TTS API
-            response = self.client.audio.speech.create(
+            response = await asyncio.to_thread(
+                self.client.audio.speech.create,
                 model=self.model,
                 voice=self.voice,
                 input=text,
-                speed=self.speed
+                speed=self.speed,
+                # Возвращаем WAV напрямую, чтобы не конвертировать MP3 (Python 3.13: audioop/pyaudioop issues)
+                response_format="wav",
             )
             
             # Получение аудио данных
@@ -76,14 +95,6 @@ class TextToSpeech:
         """Генерация и воспроизведение речи"""
         audio_data = await self.speak(text)
         if audio_data and audio_manager:
-            # Конвертация MP3 в WAV для воспроизведения
-            import io
-            import pydub
-            
-            audio_io = io.BytesIO(audio_data)
-            audio = pydub.AudioSegment.from_mp3(audio_io)
-            wav_io = io.BytesIO()
-            audio.export(wav_io, format="wav")
-            
-            await audio_manager.play_audio(wav_io.getvalue())
+            # Уже WAV (response_format="wav"), можно проигрывать напрямую
+            await audio_manager.play_audio(audio_data)
 

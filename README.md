@@ -13,7 +13,7 @@
 - 🎵 **Медиа** - воспроизведение музыки, видео, YouTube
 - 😊 **Эмоции** - система эмоций с анимациями на дисплее
 - 👤 **Датчик присутствия** - обнаружение человека, мониторинг сна и сердцебиения через mmWave C1001
-- 🎮 **Сервоприводы** - управление головой, шеей и руками через PCA9685
+- 🎮 **Сервоприводы** - управление головой/шеей/руками через PCA9685 **или** ESP32 (MQTT)
 - 📺 **Дисплеи** - анимации на 2.8" дисплее и HDMI
 - 💡 **LED индикатор** - отображение состояния робота
 
@@ -24,9 +24,9 @@
 - USB микрофон
 - USB динамики
 - USB камера
-- 2.8" дисплей (SPI)
+- 2.8" дисплей (DSI или SPI)
 - HDMI дисплей
-- PCA9685 контроллер сервоприводов
+- PCA9685 контроллер сервоприводов (опционально, если не используете ESP32)
 - 4 сервопривода (голова, шея, 2 руки)
 - mmWave датчик C1001 DFRobot
 - Расширительная плата датчиков для Raspberry Pi
@@ -80,7 +80,7 @@ pip install -r requirements.txt
 
 6. Настройте конфигурацию:
 ```bash
-cp config.yaml config.yaml.example
+cp config.yaml.example config.yaml
 nano config.yaml
 ```
 
@@ -136,6 +136,46 @@ sudo python3 main.py
 3. Загрузите код на Arduino
 4. Подключите Arduino к Raspberry Pi через USB
 5. Убедитесь, что порт указан правильно в `config.yaml` (по умолчанию: `/dev/ttyACM0`)
+
+## ESP32 (MQTT) сервоприводы (если GPIO/I2C на Pi не работает)
+
+Идея: **Raspberry Pi** публикует команды сервоприводов в MQTT, а **ESP32 Wroom-32** подписывается и управляет **PCA9685 по I2C** (PCA9685 уже генерирует 16‑канальный PWM для серв).
+
+1) Поднимите MQTT broker (на Raspberry Pi, если ещё нет):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y mosquitto mosquitto-clients
+sudo systemctl enable --now mosquitto
+```
+
+2) Прошейте ESP32:
+- Откройте `esp32_servo_mqtt/esp32_servo_mqtt.ino` в Arduino IDE
+- Установите библиотеки: `PubSubClient`, `Adafruit PWM Servo Driver Library`
+- Заполните `WIFI_SSID`, `WIFI_PASSWORD`, `MQTT_HOST`
+- Настройте I2C пины `I2C_SDA_PIN`/`I2C_SCL_PIN` и адрес `PCA9685_ADDR` при необходимости
+- Загрузите скетч в ESP32
+
+Подключение PCA9685 к ESP32 (типовое):
+- `ESP32 3V3` -> `PCA9685 VCC` (логика)
+- `ESP32 GND` -> `PCA9685 GND`
+- `ESP32 GPIO21 (SDA)` -> `PCA9685 SDA`
+- `ESP32 GPIO22 (SCL)` -> `PCA9685 SCL`
+- Питание серв на `PCA9685 V+` от отдельного БП 5–6V, **землю объединить**.
+
+3) Включите MQTT backend в `config.yaml`:
+- `hardware.servos.backend: mqtt`
+- `hardware.servos.mqtt.host`: адрес брокера (обычно IP Raspberry Pi)
+- `hardware.servos.mqtt.topic_base`: по умолчанию `robot_eva/servos`
+
+4) Быстрый тест без робота (с ПК/PI):
+
+```bash
+mosquitto_pub -h <broker_ip> -t robot_eva/servos/set -m "0,90"
+mosquitto_pub -h <broker_ip> -t robot_eva/servos/set -m "3,150"
+```
+
+Формат payload: `"<servo_id>,<angle>"`, где угол 0..180.
 
 ## Файлы конфигурации
 

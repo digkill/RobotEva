@@ -3,7 +3,10 @@
 """
 import logging
 import openai
+import asyncio
 from typing import Optional
+
+from ..utils.http_client import create_httpx_client
 
 
 class SpeechToText:
@@ -15,11 +18,20 @@ class SpeechToText:
         
         self.api_key = config.get("ai.openai.api_key", "")
         self.model = config.get("ai.speech_to_text.model", "whisper-1")
-        self.language = config.get("ai.speech_to_text.language", "ru")
+        # Language for Whisper. Can be "ru", "en", "th", or "auto" (omit hint).
+        self.language = (
+            config.get("ai.speech_to_text.language", None)
+            or config.get("ai.language.default", None)
+            or "ru"
+        )
         
         self.client = None
         if self.api_key:
-            self.client = openai.OpenAI(api_key=self.api_key)
+            # OpenAI SDK uses httpx; provide proxy-aware client for region/403 issues.
+            try:
+                self.client = openai.OpenAI(api_key=self.api_key, http_client=create_httpx_client(config))
+            except TypeError:
+                self.client = openai.OpenAI(api_key=self.api_key)
     
     async def initialize(self):
         """Инициализация сервиса"""
@@ -53,10 +65,15 @@ class SpeechToText:
             audio_file.name = "audio.wav"
             
             # Вызов OpenAI Whisper API
-            transcript = self.client.audio.transcriptions.create(
+            lang = (self.language or "").strip().lower()
+            kwargs = {}
+            if lang and lang != "auto":
+                kwargs["language"] = lang
+            transcript = await asyncio.to_thread(
+                self.client.audio.transcriptions.create,
                 model=self.model,
                 file=audio_file,
-                language=self.language
+                **kwargs,
             )
             
             text = transcript.text.strip() if hasattr(transcript, 'text') else str(transcript).strip()

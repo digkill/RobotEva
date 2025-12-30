@@ -29,21 +29,24 @@ i2c:
 servos:
   # Голова
   head_pitch:
-    channel: 0
+    # NOTE: на твоей сборке head_pitch (вверх/вниз) пока не найден/не используется
+    channel: 2
     min_angle: 0
     max_angle: 180
     default_angle: 90
     description: "Наклон головы (вверх/вниз)"
     
   head_yaw:
-    channel: 1
+    # servo_id=0 (шея/голова поворот влево/вправо)
+    channel: 0
     min_angle: 0
     max_angle: 180
-    default_angle: 90
+    default_angle: 50
     description: "Поворот головы (влево/вправо)"
     
   # Шея
   neck_pitch:
+    # servo_id=2 (шея наклоны) — по словам пользователя сейчас не работает
     channel: 2
     min_angle: 0
     max_angle: 180
@@ -52,14 +55,16 @@ servos:
     
   # Руки
   left_arm:
-    channel: 3
+    # servo_id=1 (левая рука)
+    channel: 1
     min_angle: 0
     max_angle: 180
     default_angle: 90
     description: "Левая рука"
     
   right_arm:
-    channel: 4
+    # servo_id=3 (правая рука)
+    channel: 3
     min_angle: 0
     max_angle: 180
     default_angle: 90

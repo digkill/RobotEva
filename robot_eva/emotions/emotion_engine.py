@@ -17,7 +17,14 @@ class Emotion(Enum):
     THINKING = "thinking"
     LISTENING = "listening"
     SLEEPY = "sleepy"
+    SLEEP = "sleep"
     CONFUSED = "confused"
+    PLAY = "play"
+    GAME = "game"
+    WINK = "wink"
+    LOVE = "love"
+    ANGRY = "angry"
+    AHEGAO = "ahegao"
 
 
 class EmotionEngine:
@@ -39,7 +46,14 @@ class EmotionEngine:
             Emotion.THINKING: self._thinking_action,
             Emotion.LISTENING: self._listening_action,
             Emotion.SLEEPY: self._sleepy_action,
+            Emotion.SLEEP: self._sleep_action,
             Emotion.CONFUSED: self._confused_action,
+            Emotion.PLAY: self._play_action,
+            Emotion.GAME: self._game_action,
+            Emotion.WINK: self._wink_action,
+            Emotion.LOVE: self._love_action,
+            Emotion.ANGRY: self._angry_action,
+            Emotion.AHEGAO: self._ahegao_action,
         }
     
     async def initialize(self):
@@ -109,10 +123,39 @@ class EmotionEngine:
         """Действия для эмоции 'sleepy'"""
         # Опущенная голова, медленные движения
         pass
+
+    async def _sleep_action(self):
+        """Действия для эмоции 'sleep'"""
+        pass
     
     async def _confused_action(self):
         """Действия для эмоции 'confused'"""
         # Покачивание головой из стороны в сторону
+        pass
+
+    async def _play_action(self):
+        """Действия для эмоции 'play'"""
+        pass
+
+    async def _game_action(self):
+        """Действия для эмоции 'game'"""
+        pass
+
+    async def _wink_action(self):
+        """Действия для эмоции 'wink'"""
+        pass
+
+    async def _love_action(self):
+        """Действия для эмоции 'love'"""
+        pass
+
+    async def _angry_action(self):
+        """Действия для эмоции 'angry'"""
+        pass
+
+    async def _ahegao_action(self):
+        """Действия для эмоции 'ahegao'"""
+        # Display-only emotion for now
         pass
     
     def get_current_emotion(self) -> Emotion:

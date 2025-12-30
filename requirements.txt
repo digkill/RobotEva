@@ -35,6 +35,8 @@ adafruit-circuitpython-rgb-display>=3.12.0
 # HTTP клиенты
 requests>=2.31.0
 aiohttp>=3.9.0
+PySocks>=1.7.1
+socksio>=1.0.0
 
 # MQTT для умного дома
 paho-mqtt>=1.6.1
