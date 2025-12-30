@@ -994,25 +994,58 @@ class RobotEva:
         
         for action in actions:
             action_type = action.get("type")
+            try:
+                timeout_s = float(self.config.get("behavior.actions.timeout_seconds", 20))
+            except Exception:
+                timeout_s = 20.0
+            timeout_s = max(1.0, min(120.0, timeout_s))
+            try:
+                self.logger.info(f"Action: start type={action_type} data={action}")
+            except Exception:
+                self.logger.info(f"Action: start type={action_type}")
+            self._heartbeat()
             
             if action_type == "smart_home":
-                await self.smart_home_service.execute(action.get("command"))
+                try:
+                    await asyncio.wait_for(self.smart_home_service.execute(action.get("command")), timeout=timeout_s)
+                except asyncio.TimeoutError:
+                    self.logger.warning("Action timeout: smart_home")
             
             elif action_type == "search":
-                results = await self.internet_service.search(action.get("query"))
-                response["search_results"] = results
+                try:
+                    results = await asyncio.wait_for(self.internet_service.search(action.get("query")), timeout=timeout_s)
+                    response["search_results"] = results
+                except asyncio.TimeoutError:
+                    self.logger.warning("Action timeout: search")
             
             elif action_type == "play_music":
-                await self.media_service.play_music(action.get("query"))
+                try:
+                    await asyncio.wait_for(self.media_service.play_music(action.get("query")), timeout=timeout_s)
+                except asyncio.TimeoutError:
+                    self.logger.warning("Action timeout: play_music")
             
             elif action_type == "play_video":
-                await self.media_service.play_video(action.get("url"))
+                try:
+                    await asyncio.wait_for(self.media_service.play_video(action.get("url")), timeout=timeout_s)
+                except asyncio.TimeoutError:
+                    self.logger.warning("Action timeout: play_video")
             
             elif action_type == "servo_move":
-                await self.servo_controller.move(
-                    action.get("servo"),
-                    action.get("angle")
-                )
+                try:
+                    await asyncio.wait_for(
+                        self.servo_controller.move(
+                            action.get("servo"),
+                            action.get("angle")
+                        ),
+                        timeout=timeout_s
+                    )
+                except asyncio.TimeoutError:
+                    self.logger.warning("Action timeout: servo_move")
+            self._heartbeat()
+            try:
+                self.logger.info(f"Action: done type={action_type}")
+            except Exception:
+                pass
 
     async def _apply_robot_actions(self, actions):
         """Apply robot_actions parsed from the LLM answer text."""

@@ -206,9 +206,14 @@ services:
     music_path: /home/pi/Music
     youtube:
       enabled: true
+      # yt-dlp can block on network/dns; we run it in a thread and cap time spent on searching.
+      search_timeout_seconds: 12
 
 # Поведение (жесты/движения серв)
 behavior:
+  # Safety: cap how long any single LLM "action" may block the robot loop.
+  actions:
+    timeout_seconds: 20
   # Dialogue mode: after Eva speaks, she will listen for a reply and continue without wake word.
   dialogue:
     enabled: true
