@@ -93,6 +93,7 @@ class DisplayManager:
 
     async def show_animation(self, animation_name: str):
         """Показ анимации на дисплеях"""
+        self.logger.info(f"show_animation: {animation_name} (small={self.small_display is not None}, hdmi={self.hdmi_surface is not None})")
         if self.animation_task:
             self.animation_task.cancel()
 
@@ -106,6 +107,7 @@ class DisplayManager:
         try:
             active_name = animation_name
             info = get_animation_info(active_name)
+            self.logger.debug(f"_run_animation: {active_name} starting (frames={info.get('frames')}, loop={info.get('loop')})")
             loop = bool(info.get("loop", True))
             num_frames = int(info.get("frames", 1)) or 1
 

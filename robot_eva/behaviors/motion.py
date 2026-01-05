@@ -30,19 +30,22 @@ class MotionBehavior:
         self.reset_on_stop: bool = bool(config.get("behavior.motion.reset_on_stop", True))
 
         # Default centers/ranges (degrees). Can be overridden in config.
+        # Note: SERVO_HEAD_PITCH is typically channel 0 (neck pitch/кивки)
+        #       SERVO_HEAD_YAW is typically channel 2 (head yaw/повороты)
+        # По умолчанию все сервы в позиции 0°
         self.center: Dict[int, float] = {
-            getattr(self.servos, "SERVO_HEAD_PITCH", 0): float(config.get("behavior.motion.center.head_pitch", 90)),
-            getattr(self.servos, "SERVO_HEAD_YAW", 1): float(config.get("behavior.motion.center.head_yaw", 90)),
-            getattr(self.servos, "SERVO_NECK_PITCH", 2): float(config.get("behavior.motion.center.neck_pitch", 90)),
-            getattr(self.servos, "SERVO_LEFT_ARM", 3): float(config.get("behavior.motion.center.left_arm", 90)),
-            getattr(self.servos, "SERVO_RIGHT_ARM", 4): float(config.get("behavior.motion.center.right_arm", 90)),
+            getattr(self.servos, "SERVO_HEAD_PITCH", 0): float(config.get("behavior.motion.center.neck_pitch", 0)),
+            getattr(self.servos, "SERVO_HEAD_YAW", 2): float(config.get("behavior.motion.center.head_yaw", 0)),
+            getattr(self.servos, "SERVO_NECK_PITCH", 0): float(config.get("behavior.motion.center.neck_pitch", 0)),
+            getattr(self.servos, "SERVO_LEFT_ARM", 3): float(config.get("behavior.motion.center.left_arm", 0)),
+            getattr(self.servos, "SERVO_RIGHT_ARM", 1): float(config.get("behavior.motion.center.right_arm", 0)),
         }
         self.range: Dict[int, float] = {
-            getattr(self.servos, "SERVO_HEAD_PITCH", 0): float(config.get("behavior.motion.range.head_pitch", 15)),
-            getattr(self.servos, "SERVO_HEAD_YAW", 1): float(config.get("behavior.motion.range.head_yaw", 25)),
-            getattr(self.servos, "SERVO_NECK_PITCH", 2): float(config.get("behavior.motion.range.neck_pitch", 10)),
-            getattr(self.servos, "SERVO_LEFT_ARM", 3): float(config.get("behavior.motion.range.left_arm", 20)),
-            getattr(self.servos, "SERVO_RIGHT_ARM", 4): float(config.get("behavior.motion.range.right_arm", 20)),
+            getattr(self.servos, "SERVO_HEAD_PITCH", 0): float(config.get("behavior.motion.range.neck_pitch", 15)),
+            getattr(self.servos, "SERVO_HEAD_YAW", 2): float(config.get("behavior.motion.range.head_yaw", 30)),
+            getattr(self.servos, "SERVO_NECK_PITCH", 0): float(config.get("behavior.motion.range.neck_pitch", 15)),
+            getattr(self.servos, "SERVO_LEFT_ARM", 3): float(config.get("behavior.motion.range.left_arm", 30)),
+            getattr(self.servos, "SERVO_RIGHT_ARM", 1): float(config.get("behavior.motion.range.right_arm", 30)),
         }
 
         idle_interval = config.get("behavior.motion.idle.interval_seconds", [8, 16])
@@ -151,19 +154,21 @@ class MotionBehavior:
         r = float(self.range.get(servo_id, 0.0))
         target = _clamp(c + float(offset), c - r, c + r)
         if smooth and hasattr(self.servos, "move_smooth"):
-            await self.servos.move_smooth(servo_id, target, steps=6, delay=0.04)
+            # Увеличено количество шагов для более плавного движения
+            await self.servos.move_smooth(servo_id, target, steps=10, delay=0.025)
         else:
             await self.servos.move(servo_id, target)
 
     async def _return_to_center(self, servo_id: int):
         c = float(self.center.get(servo_id, 90.0))
         if hasattr(self.servos, "move_smooth"):
-            await self.servos.move_smooth(servo_id, c, steps=6, delay=0.04)
+            # Увеличено количество шагов для более плавного возврата
+            await self.servos.move_smooth(servo_id, c, steps=12, delay=0.025)
         else:
             await self.servos.move(servo_id, c)
 
     async def _speaking_loop(self):
-        head_yaw = getattr(self.servos, "SERVO_HEAD_YAW", 1)
+        head_yaw = getattr(self.servos, "SERVO_HEAD_YAW", 2)
         head_pitch = getattr(self.servos, "SERVO_HEAD_PITCH", 0)
         left_arm = getattr(self.servos, "SERVO_LEFT_ARM", 3)
         right_arm = getattr(self.servos, "SERVO_RIGHT_ARM", 4)
@@ -204,7 +209,7 @@ class MotionBehavior:
             pass
 
     async def _idle_loop(self):
-        head_yaw = getattr(self.servos, "SERVO_HEAD_YAW", 1)
+        head_yaw = getattr(self.servos, "SERVO_HEAD_YAW", 2)
         head_pitch = getattr(self.servos, "SERVO_HEAD_PITCH", 0)
         left_arm = getattr(self.servos, "SERVO_LEFT_ARM", 3)
         right_arm = getattr(self.servos, "SERVO_RIGHT_ARM", 4)
@@ -256,7 +261,7 @@ class MotionBehavior:
         """
         emotion = (emotion or "neutral").lower()
         head_pitch = getattr(self.servos, "SERVO_HEAD_PITCH", 0)
-        head_yaw = getattr(self.servos, "SERVO_HEAD_YAW", 1)
+        head_yaw = getattr(self.servos, "SERVO_HEAD_YAW", 2)
 
         try:
             if emotion in ("happy",):

@@ -94,9 +94,9 @@ class FaceTrackingBehavior:
         self._paused = bool(paused)
 
     def _get_centers_and_limits(self) -> Tuple[float, float, float, float]:
-        # Centers
-        yaw_center = float(self.config.get("behavior.motion.center.head_yaw", 90))
-        pitch_center = float(self.config.get("behavior.motion.center.head_pitch", 90))
+        # Centers (дефолт 0° для всех серв)
+        yaw_center = float(self.config.get("behavior.motion.center.head_yaw", 0))
+        pitch_center = float(self.config.get("behavior.motion.center.neck_pitch", 0))
 
         # Max offsets (degrees). Prefer explicit face_tracking config, else use motion ranges.
         yaw_max = float(
@@ -116,8 +116,8 @@ class FaceTrackingBehavior:
         return yaw_center, pitch_center, yaw_max, pitch_max
 
     async def _move_head(self, yaw: float, pitch: float) -> None:
-        yaw_id = getattr(self.servos, "SERVO_HEAD_YAW", 1)
-        pitch_id = getattr(self.servos, "SERVO_HEAD_PITCH", 0)
+        yaw_id = getattr(self.servos, "SERVO_HEAD_YAW", 2)    # Канал 2
+        pitch_id = getattr(self.servos, "SERVO_HEAD_PITCH", 0)  # Канал 0
 
         # Small smoothing move; for MQTT this becomes a short sequence of moves.
         steps = int(self.config.get("behavior.face_tracking.smooth_steps", 3))

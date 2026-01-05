@@ -9,12 +9,12 @@ from adafruit_servokit import ServoKit
 class ServoController:
     """Контроллер сервоприводов через PCA9685"""
     
-    # Определение сервоприводов
-    SERVO_HEAD_PITCH = 0      # Наклон головы (вверх/вниз)
-    SERVO_HEAD_YAW = 1        # Поворот головы (влево/вправо)
-    SERVO_NECK_PITCH = 2      # Наклон шеи
-    SERVO_LEFT_ARM = 3        # Левая рука
-    SERVO_RIGHT_ARM = 4       # Правая рука
+    # Определение сервоприводов (каналы PCA9685)
+    SERVO_HEAD_PITCH = 0      # Канал 0: Наклон головы/шеи (вверх/вниз, кивки)
+    SERVO_HEAD_YAW = 2        # Канал 2: Поворот головы (влево/вправо)
+    SERVO_NECK_PITCH = 0      # Канал 0: То же что HEAD_PITCH (кивки)
+    SERVO_LEFT_ARM = 3        # Канал 3: Левая рука
+    SERVO_RIGHT_ARM = 1       # Канал 1: Правая рука
     
     def __init__(self, config):
         self.config = config
@@ -170,27 +170,27 @@ class ServoController:
             await asyncio.sleep(delay)
     
     async def nod_head(self, times: int = 1):
-        """Кивание головой"""
+        """Кивание головой (от позиции 0°)"""
         import asyncio
         
         for _ in range(times):
-            await self.move_smooth(self.SERVO_HEAD_PITCH, 110, steps=5)
+            await self.move_smooth(self.SERVO_HEAD_PITCH, 30, steps=5)
             await asyncio.sleep(0.3)
-            await self.move_smooth(self.SERVO_HEAD_PITCH, 70, steps=5)
+            await self.move_smooth(self.SERVO_HEAD_PITCH, -20, steps=5)
             await asyncio.sleep(0.3)
-            await self.move_smooth(self.SERVO_HEAD_PITCH, 90, steps=5)
+            await self.move_smooth(self.SERVO_HEAD_PITCH, 0, steps=5)
             await asyncio.sleep(0.5)
     
     async def shake_head(self, times: int = 1):
-        """Покачивание головой (нет)"""
+        """Покачивание головой (от позиции 0°)"""
         import asyncio
         
         for _ in range(times):
-            await self.move_smooth(self.SERVO_HEAD_YAW, 120, steps=5)
+            await self.move_smooth(self.SERVO_HEAD_YAW, 30, steps=5)
             await asyncio.sleep(0.2)
-            await self.move_smooth(self.SERVO_HEAD_YAW, 60, steps=5)
+            await self.move_smooth(self.SERVO_HEAD_YAW, -30, steps=5)
             await asyncio.sleep(0.2)
-            await self.move_smooth(self.SERVO_HEAD_YAW, 90, steps=5)
+            await self.move_smooth(self.SERVO_HEAD_YAW, 0, steps=5)
             await asyncio.sleep(0.3)
     
     async def wave_arms(self, times: int = 1):
@@ -231,10 +231,10 @@ class MqttServoController:
 
     # Те же ID, что и в ServoController
     SERVO_HEAD_PITCH = 0
-    SERVO_HEAD_YAW = 1
-    SERVO_NECK_PITCH = 2
+    SERVO_HEAD_YAW = 2
+    SERVO_NECK_PITCH = 0
     SERVO_LEFT_ARM = 3
-    SERVO_RIGHT_ARM = 4
+    SERVO_RIGHT_ARM = 1
 
     def __init__(self, config):
         self.config = config
@@ -375,17 +375,17 @@ class MqttServoController:
             await asyncio.sleep(delay)
 
     async def nod_head(self, times: int = 1):
-        """Кивание головой"""
+        """Кивание головой (от позиции 0°)"""
         import asyncio
         # If head_pitch is not mapped (or equals yaw), skip to avoid weird motion.
         if self.SERVO_HEAD_PITCH == self.SERVO_HEAD_YAW:
             return
         for _ in range(times):
-            await self.move_smooth(self.SERVO_HEAD_PITCH, 110, steps=5)
+            await self.move_smooth(self.SERVO_HEAD_PITCH, 30, steps=5)
             await asyncio.sleep(0.3)
-            await self.move_smooth(self.SERVO_HEAD_PITCH, 70, steps=5)
+            await self.move_smooth(self.SERVO_HEAD_PITCH, -20, steps=5)
             await asyncio.sleep(0.3)
-            await self.move_smooth(self.SERVO_HEAD_PITCH, 90, steps=5)
+            await self.move_smooth(self.SERVO_HEAD_PITCH, 0, steps=5)
             await asyncio.sleep(0.5)
 
     async def shake_head(self, times: int = 1):

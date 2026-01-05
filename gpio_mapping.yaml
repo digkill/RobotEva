@@ -37,37 +37,37 @@ servos:
     description: "Наклон головы (вверх/вниз)"
     
   head_yaw:
-    # servo_id=0 (шея/голова поворот влево/вправо)
-    channel: 0
+    # Канал 2: Поворот головы влево/вправо
+    channel: 2
     min_angle: 0
     max_angle: 180
-    default_angle: 50
+    default_angle: 0
     description: "Поворот головы (влево/вправо)"
     
   # Шея
   neck_pitch:
-    # servo_id=2 (шея наклоны) — по словам пользователя сейчас не работает
-    channel: 2
+    # Канал 0: Кивки головы вверх/вниз
+    channel: 0
     min_angle: 0
     max_angle: 180
-    default_angle: 90
-    description: "Наклон шеи"
+    default_angle: 0
+    description: "Наклон шеи (кивки вверх/вниз)"
     
   # Руки
   left_arm:
-    # servo_id=1 (левая рука)
-    channel: 1
-    min_angle: 0
-    max_angle: 180
-    default_angle: 90
-    description: "Левая рука"
-    
-  right_arm:
-    # servo_id=3 (правая рука)
+    # Канал 3: Левая рука
     channel: 3
     min_angle: 0
     max_angle: 180
-    default_angle: 90
+    default_angle: 0
+    description: "Левая рука"
+    
+  right_arm:
+    # Канал 1: Правая рука
+    channel: 1
+    min_angle: 0
+    max_angle: 180
+    default_angle: 0
     description: "Правая рука"
 
 # SPI устройства
