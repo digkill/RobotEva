@@ -45,6 +45,19 @@ class DisplayManager:
 
         # Speaking overlay (mouth animation while robot is talking)
         self._speaking: bool = False
+        
+        # Touch animations - читаем из config или используем все по умолчанию
+        touch_enabled = config.get("hardware.display.small.touch.enabled", True)
+        configured_animations = config.get("hardware.display.small.touch.animations", [])
+        
+        default_animations = [
+            "dizzy", "stars", "hearts", "silly", "crazy", "sparkle", 
+            "laugh", "blush", "surprise_big", "money"
+        ]
+        
+        self._touch_enabled = touch_enabled
+        self._touch_animations = configured_animations if configured_animations else default_animations
+        self._previous_animation: Optional[str] = None  # Для возврата после touch анимации
 
     async def set_speaking(self, is_speaking: bool) -> None:
         """Enable/disable speaking overlay animation (mouth movement)."""
@@ -74,6 +87,11 @@ class DisplayManager:
                 else:
                     raise RuntimeError(f"Unsupported small display backend: {backend}")
                 await self.small_display.initialize()
+                
+                # Установить callback для touch событий (только для SDL)
+                if isinstance(self.small_display, SmallSdlDisplay):
+                    self.small_display.set_touch_callback(self._handle_touch)
+                
                 self.logger.info(f'2.8" дисплей инициализирован ({self.small_display_size[0]}x{self.small_display_size[1]})')
             except Exception as e:
                 self.logger.warning(f'Не удалось инициализировать 2.8" дисплей: {e}')
@@ -239,6 +257,38 @@ class DisplayManager:
             pygame.display.flip()
         except Exception as e:
             self.logger.error(f"Ошибка отрисовки на HDMI: {e}", exc_info=True)
+    
+    async def _handle_touch(self, pos: Tuple[int, int]) -> None:
+        """Обработка касания экрана - показать случайную забавную анимацию"""
+        try:
+            # Проверяем, включены ли touch анимации
+            if not self._touch_enabled:
+                return
+            
+            x, y = pos
+            self.logger.info(f"Touch detected at ({x}, {y})")
+            
+            # Выбираем случайную touch анимацию
+            if not self._touch_animations:
+                return
+            
+            touch_animation = random.choice(self._touch_animations)
+            self.logger.info(f"Playing touch animation: {touch_animation}")
+            
+            # Сохраняем текущую анимацию для возврата
+            self._previous_animation = self.current_animation
+            
+            # Показываем touch анимацию
+            await self.show_animation(touch_animation)
+            
+            # После окончания анимации возвращаемся к предыдущей
+            # (show_animation уже ждёт завершения если loop=False)
+            if self._previous_animation:
+                await asyncio.sleep(0.3)  # Небольшая пауза
+                await self.show_animation(self._previous_animation)
+            
+        except Exception as e:
+            self.logger.error(f"Touch handling error: {e}", exc_info=True)
 
     async def cleanup(self):
         if self.animation_task:

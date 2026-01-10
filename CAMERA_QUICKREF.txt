@@ -1,0 +1,96 @@
+╔═══════════════════════════════════════════════════════════════════════╗
+║                   OV5647 CAMERA - QUICK REFERENCE                     ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+📋 CAMERA MODES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Mode 0: 640x480    @ 58fps  →  Fast tracking, low latency
+Mode 1: 1296x972   @ 46fps  →  ⭐ RECOMMENDED - Best balance
+Mode 2: 1920x1080  @ 32fps  →  High quality, Full HD
+Mode 3: 2592x1944  @ 15fps  →  Maximum resolution, photos
+
+🔧 SETUP (First Time)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Connect ribbon cable to CSI port (blue side toward audio jack)
+2. sudo raspi-config → Interface Options → Camera → Yes → Reboot
+3. bash install_camera_deps.sh
+
+🧪 TESTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+libcamera-hello --list-cameras     # Check camera detection
+python3 test_ov5647.py              # Test default mode (1296x972)
+python3 test_ov5647.py --list       # List all modes
+python3 test_ov5647.py --mode 0     # Test specific mode
+bash check_camera_deps.sh           # Check all dependencies
+
+⚙️ CONFIGURATION (config.yaml)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+hardware:
+  camera:
+    type: csi                # "csi" for OV5647, "usb" for webcam
+    resolution: [1296, 972]  # Mode 1 (recommended)
+    fps: 46
+
+🚀 RECOMMENDED SETTINGS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Face Tracking:     resolution: [1296, 972]  fps: 46
+Fast Motion:       resolution: [640, 480]   fps: 58
+High Quality:      resolution: [1920, 1080] fps: 32
+Photography:       resolution: [2592, 1944] fps: 15
+
+🐛 TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Camera not detected:
+  → Check ribbon cable connection (blue side toward audio)
+  → vcgencmd get_camera  (should show: detected=1)
+  → libcamera-hello --list-cameras
+
+picamera2 error:
+  → sudo apt install -y python3-picamera2
+
+Poor image quality:
+  → Keep objects 30cm+ away (fixed focus)
+  → Ensure good lighting (CSI cameras need light)
+  → Clean lens with soft cloth
+
+OpenCV error:
+  → pip3 install opencv-python
+  → Or: sudo apt install python3-opencv
+
+📁 FILES REFERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+test_ov5647.py           - Test all camera modes
+check_camera_deps.sh     - Check dependencies
+install_camera_deps.sh   - Install dependencies
+КАМЕРА_OV5647.md        - Full guide (Russian)
+CAMERA_SETUP.md         - Full guide (English)
+OV5647_INTEGRATION.md   - Technical details
+
+💻 USAGE IN CODE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+frame = await robot.camera.capture_frame()
+await robot.camera.save_frame("photo.jpg")
+if robot.camera.is_available():
+    print("Camera ready!")
+
+🔄 SWITCH TO USB CAMERA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+In config.yaml, change:
+  type: usb
+  resolution: [640, 480]
+  fps: 30
+
+📦 DEPENDENCIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✓ python3-picamera2  - CSI camera interface
+✓ libcamera-apps     - Camera utilities
+✓ opencv-python      - Image processing
+✓ numpy              - Array operations
+
+🎯 QUICK START
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. bash install_camera_deps.sh      # Install everything
+2. python3 test_ov5647.py            # Test camera
+3. python3 main.py                   # Run RobotEva
+
+✨ Camera OV5647 is now integrated and ready to use! ✨

@@ -80,9 +80,12 @@ class GunGestureBehavior:
         max_tokens = max(3, min(30, max_tokens))
 
         prompt = (
-            "Look at the image. If the person is making a FINGER GUN gesture with a hand "
-            "(index finger pointing forward and thumb up, like a gun), reply with exactly: GUN. "
-            "Otherwise reply with exactly: NO."
+            "Look at the image. Is the person making a FINGER GUN gesture? "
+            "Gun gestures: index finger pointing forward, thumb up (like a pistol). "
+            "Can be with one hand or both hands. "
+            "If you see this gesture, reply EXACTLY: GUN. "
+            "Otherwise reply EXACTLY: NO. "
+            "Be SENSITIVE - detect even casual gun gestures."
         )
 
         while self._running:

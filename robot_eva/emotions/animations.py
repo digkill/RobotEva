@@ -179,7 +179,116 @@ ANIMATIONS = {
             {"type": "text", "text": "///", "x": 88, "y": 0, "size": 22, "anchor": "mm", "color": (255, 120, 160)},
         ],
     },
+    # ====== TOUCH ANIMATIONS (забавные анимации при касании экрана) ======
+    "dizzy": {
+        "frames": 20,
+        "loop": False,
+        "elements": [
+            # Кружащиеся глаза (звёздочки)
+            {"type": "text", "text": "@", "x": -46, "y": -20, "size": 50, "anchor": "mm", "color": (255, 255, 255)},
+            {"type": "text", "text": "@", "x": 46, "y": -20, "size": 50, "anchor": "mm", "color": (255, 255, 255)},
+            {"type": "mouth", "x": 0, "y": 60, "shape": "line", "width": 50},
+        ],
+    },
+    "stars": {
+        "frames": 15,
+        "loop": False,
+        "elements": [
+            # Звёздочки в глазах
+            {"type": "text", "text": "★", "x": -46, "y": -20, "size": 60, "anchor": "mm", "color": (255, 255, 0)},
+            {"type": "text", "text": "★", "x": 46, "y": -20, "size": 60, "anchor": "mm", "color": (255, 255, 0)},
+            {"type": "mouth", "x": 0, "y": 55, "shape": "ellipse", "width": 60, "height": 40},
+        ],
+    },
+    "hearts": {
+        "frames": 18,
+        "loop": False,
+        "elements": [
+            # Сердечки в глазах
+            {"type": "text", "text": "♥", "x": -46, "y": -20, "size": 55, "anchor": "mm", "color": (255, 100, 150)},
+            {"type": "text", "text": "♥", "x": 46, "y": -20, "size": 55, "anchor": "mm", "color": (255, 100, 150)},
+            {"type": "mouth", "x": 0, "y": 55, "shape": "arc", "start": 20, "end": 160, "radius": 45},
+        ],
+    },
+    "silly": {
+        "frames": 25,
+        "loop": False,
+        "elements": [
+            # Один глаз закрыт, другой большой, язык наружу
+            {"type": "eye_left", "x": -46, "y": -20, "shape": "line", "width": 70},  # Закрыт
+            {"type": "eye_right", "x": 46, "y": -20, "shape": "ellipse", "width": 80, "height": 70},  # Большой
+            {"type": "text", "text": ":P", "x": 0, "y": 70, "size": 40, "anchor": "mm", "color": (255, 150, 150)},
+        ],
+    },
+    "crazy": {
+        "frames": 20,
+        "loop": False,
+        "elements": [
+            # Спирали в глазах
+            {"type": "text", "text": "◉", "x": -46, "y": -20, "size": 60, "anchor": "mm", "color": (255, 255, 255)},
+            {"type": "text", "text": "◉", "x": 46, "y": -20, "size": 60, "anchor": "mm", "color": (255, 255, 255)},
+            {"type": "mouth", "x": 0, "y": 60, "shape": "arc", "start": 20, "end": 160, "radius": 50},
+        ],
+    },
+    "sparkle": {
+        "frames": 12,
+        "loop": False,
+        "elements": [
+            # Сверкающие глаза
+            {"type": "text", "text": "✨", "x": -46, "y": -20, "size": 55, "anchor": "mm", "color": (255, 255, 200)},
+            {"type": "text", "text": "✨", "x": 46, "y": -20, "size": 55, "anchor": "mm", "color": (255, 255, 200)},
+            {"type": "mouth", "x": 0, "y": 55, "shape": "arc", "start": 20, "end": 160, "radius": 40},
+            {"type": "text", "text": "✨", "x": -80, "y": -40, "size": 30, "anchor": "mm", "color": (255, 255, 200)},
+            {"type": "text", "text": "✨", "x": 80, "y": -40, "size": 30, "anchor": "mm", "color": (255, 255, 200)},
+        ],
+    },
+    "laugh": {
+        "frames": 18,
+        "loop": False,
+        "elements": [
+            # Закрытые глаза от смеха
+            {"type": "eye_left", "x": -46, "y": -15, "shape": "arc", "start": 200, "end": 340, "radius": 35},
+            {"type": "eye_right", "x": 46, "y": -15, "shape": "arc", "start": 200, "end": 340, "radius": 35},
+            {"type": "mouth", "x": 0, "y": 55, "shape": "ellipse", "width": 70, "height": 50},
+            {"type": "text", "text": "HA", "x": -70, "y": 0, "size": 20, "anchor": "mm", "color": (255, 255, 255)},
+            {"type": "text", "text": "HA", "x": 70, "y": 0, "size": 20, "anchor": "mm", "color": (255, 255, 255)},
+        ],
+    },
+    "blush": {
+        "frames": 22,
+        "loop": False,
+        "elements": [
+            # Застенчивый румянец
+            {"type": "eye_left", "x": -46, "y": -20, "shape": "ellipse", "width": 60, "height": 50},
+            {"type": "eye_right", "x": 46, "y": -20, "shape": "ellipse", "width": 60, "height": 50},
+            {"type": "mouth", "x": 0, "y": 60, "shape": "line", "width": 40},
+            {"type": "text", "text": "//", "x": -75, "y": 10, "size": 35, "anchor": "mm", "color": (255, 150, 150)},
+            {"type": "text", "text": "//", "x": 75, "y": 10, "size": 35, "anchor": "mm", "color": (255, 150, 150)},
+        ],
+    },
+    "surprise_big": {
+        "frames": 10,
+        "loop": False,
+        "elements": [
+            # ОГРОМНЫЕ глаза
+            {"type": "eye_left", "x": -46, "y": -30, "shape": "ellipse", "width": 90, "height": 80},
+            {"type": "eye_right", "x": 46, "y": -30, "shape": "ellipse", "width": 90, "height": 80},
+            {"type": "mouth", "x": 0, "y": 60, "shape": "ellipse", "width": 60, "height": 65},
+            {"type": "text", "text": "!", "x": 0, "y": -80, "size": 40, "anchor": "mm", "color": (255, 255, 255)},
+        ],
+    },
+    "money": {
+        "frames": 20,
+        "loop": False,
+        "elements": [
+            # Денежные знаки в глазах
+            {"type": "text", "text": "$", "x": -46, "y": -20, "size": 60, "anchor": "mm", "color": (100, 255, 100)},
+            {"type": "text", "text": "$", "x": 46, "y": -20, "size": 60, "anchor": "mm", "color": (100, 255, 100)},
+            {"type": "mouth", "x": 0, "y": 55, "shape": "arc", "start": 20, "end": 160, "radius": 50},
+        ],
+    },
 }
+
 
 
 def get_animation_frame(emotion: str, absolute_frame_idx: int) -> Dict:

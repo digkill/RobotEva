@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Callable, Awaitable
 
 import pygame
 from PIL import Image
@@ -27,6 +27,9 @@ class SmallSdlDisplay(SmallDisplayBase):
 
         self._surface: Optional[pygame.Surface] = None
         self._window_size: Optional[Tuple[int, int]] = None
+        
+        # Touch callback
+        self._touch_callback: Optional[Callable[[Tuple[int, int]], Awaitable[None]]] = None
 
     async def initialize(self) -> None:
         # Require GUI session
@@ -51,11 +54,28 @@ class SmallSdlDisplay(SmallDisplayBase):
         if not self._surface or not self._window_size:
             return
 
-        # Keep SDL responsive
+        # Process touch/mouse events
         try:
-            pygame.event.pump()
-        except Exception:
-            pass
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pass  # Игнорируем закрытие в fullscreen
+                elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
+                    # Получаем координаты касания
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        touch_x, touch_y = event.pos
+                    else:  # FINGERDOWN (touchscreen)
+                        # Нормализованные координаты (0-1)
+                        touch_x = int(event.x * self._window_size[0])
+                        touch_y = int(event.y * self._window_size[1])
+                    
+                    # Вызываем callback если установлен
+                    if self._touch_callback:
+                        try:
+                            await self._touch_callback((touch_x, touch_y))
+                        except Exception as e:
+                            self.logger.error(f"Touch callback error: {e}")
+        except Exception as e:
+            self.logger.debug(f"Event processing error: {e}")
 
         if img.mode != "RGB":
             img = img.convert("RGB")
@@ -82,6 +102,10 @@ class SmallSdlDisplay(SmallDisplayBase):
 
         # Yield back to event loop
         await asyncio.sleep(0)
+    
+    def set_touch_callback(self, callback: Optional[Callable[[Tuple[int, int]], Awaitable[None]]]) -> None:
+        """Установить callback для обработки касаний экрана"""
+        self._touch_callback = callback
 
     async def cleanup(self) -> None:
         try:

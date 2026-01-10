@@ -23,7 +23,7 @@
 - Python 3.9+
 - USB микрофон
 - USB динамики
-- USB камера
+- Камера (OV5647 CSI или USB веб-камера) - см. [CAMERA_SETUP.md](CAMERA_SETUP.md)
 - 2.8" дисплей (DSI или SPI)
 - HDMI дисплей
 - PCA9685 контроллер сервоприводов (опционально, если не используете ESP32)
@@ -52,7 +52,14 @@ sudo apt-get update
 sudo apt-get install -y portaudio19-dev libportaudio2 libportaudiocpp0 libasound2-dev build-essential
 ```
 
-4. Запустите скрипт установки (рекомендуется):
+4. Установите зависимости для камеры (CSI или USB):
+```bash
+./install_camera_deps.sh
+```
+
+Для подробной информации о настройке камеры OV5647 см. [КАМЕРА_OV5647.md](КАМЕРА_OV5647.md) или [CAMERA_SETUP.md](CAMERA_SETUP.md).
+
+5. Запустите скрипт установки (рекомендуется):
 ```bash
 ./setup.sh
 ```
@@ -92,7 +99,8 @@ nano config.yaml
 - Проверьте I2C устройства (PCA9685): `i2cdetect -y 1`
 - Проверьте USB устройства: `lsusb`
 - Проверьте последовательные порты: `ls /dev/tty*`
-- Проверьте камеру: `lsusb | grep -i camera`
+- Проверьте камеру CSI: `libcamera-hello --list-cameras` или USB: `lsusb | grep -i camera`
+- Тестируйте камеру: `python3 test_ov5647.py` (CSI) или `python3 scripts/check_camera.py --type usb`
 - Проверьте микрофон: `arecord -l`
 - Проверьте динамики: `aplay -l`
 

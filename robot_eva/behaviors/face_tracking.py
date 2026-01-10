@@ -51,12 +51,23 @@ class FaceTrackingBehavior:
             return
 
         # Haar cascade path
-        cascade_path = str(
-            self.config.get(
-                "behavior.face_tracking.cascade_path",
-                str(getattr(cv2.data, "haarcascades", "")) + "haarcascade_frontalface_default.xml",
-            )
-        )
+        # Try config first, then local data/ folder, then cv2.data (if available)
+        cascade_path = self.config.get("behavior.face_tracking.cascade_path", None)
+        if not cascade_path:
+            # Try local data/ folder first
+            import os
+            local_cascade = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
+                                         "data", "haarcascade_frontalface_default.xml")
+            if os.path.exists(local_cascade):
+                cascade_path = local_cascade
+            elif hasattr(cv2, 'data') and hasattr(cv2.data, 'haarcascades'):
+                # Fallback to cv2.data if available
+                cascade_path = str(cv2.data.haarcascades) + "haarcascade_frontalface_default.xml"
+            else:
+                # Last resort: assume system path
+                cascade_path = "/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml"
+        
+        cascade_path = str(cascade_path)
         try:
             self._cascade = cv2.CascadeClassifier(cascade_path)
             if self._cascade.empty():

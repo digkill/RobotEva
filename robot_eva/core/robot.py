@@ -25,6 +25,7 @@ from ..behaviors.motion import MotionBehavior
 from ..behaviors.face_tracking import FaceTrackingBehavior
 from ..behaviors.heart_gesture import HeartGestureBehavior
 from ..behaviors.gun_gesture import GunGestureBehavior
+from ..behaviors.cute_gesture import CuteGestureBehavior
 from ..services.smart_home import SmartHomeService
 from ..services.internet import InternetService
 from ..services.media import MediaService
@@ -62,6 +63,9 @@ class RobotEva:
         self.is_running = False
         self.is_listening = False
 
+        # Activity control (Stop/Resume commands)
+        self._is_active = True  # Флаг активности: False = робот молчит
+
         # Idle chat (Eva initiates conversation)
         self._idle_chat_task: Optional[asyncio.Task] = None
         self._last_interaction_ts: float = time.time()
@@ -80,6 +84,16 @@ class RobotEva:
                 self.face_tracking_behavior.set_paused(self._speaking_flag)
             except Exception:
                 pass
+
+    def set_active(self, is_active: bool) -> None:
+        """Установить активность робота (Stop/Resume)"""
+        self._is_active = bool(is_active)
+        status = "активен" if is_active else "остановлен"
+        self.logger.info(f"Робот {status}")
+    
+    def is_active(self) -> bool:
+        """Проверить активность робота"""
+        return self._is_active
 
     async def _tts_play(self, text: str) -> None:
         """
@@ -406,6 +420,74 @@ class RobotEva:
             except Exception as e:
                 self.logger.warning(f"Не удалось инициализировать GunGestureBehavior: {e}")
                 self.gun_gesture_behavior = None
+
+            # Gesture: cute (peace sign, waving, etc) -> cute animation + phrase
+            async def _on_cute():
+                # Show cute animation
+                if self.display_manager:
+                    # Случайно выбираем милую анимацию
+                    import random
+                    cute_animations = ["sparkle", "blush", "hearts", "wink"]
+                    animation = random.choice(cute_animations)
+                    await self.display_manager.show_animation(animation)
+                
+                if self.emotion_engine:
+                    await self.emotion_engine.set_emotion("happy")
+                if self.motion_behavior:
+                    await self.motion_behavior.notify_emotion("happy")
+
+                # Say cute phrase
+                phrase = str(self.config.get("behavior.gestures.cute.tts_phrase", "Ой, какая прелесть!") or "").strip()
+                if phrase:
+                    await self._tts_play(phrase)
+
+                # Return to neutral after a short time
+                try:
+                    keep_s = float(self.config.get("behavior.gestures.cute.display_duration_seconds", 5.0))
+                except Exception:
+                    keep_s = 5.0
+                keep_s = max(1.0, min(60.0, keep_s))
+
+                async def _return_to_neutral_later():
+                    try:
+                        await asyncio.sleep(keep_s)
+                        if not self.is_running:
+                            return
+                        if self.is_listening or getattr(self, "_speaking_flag", False):
+                            return
+                        # Don't override if emotion has changed
+                        try:
+                            cur = getattr(self.emotion_engine, "current_emotion", None) if self.emotion_engine else None
+                            cur_val = getattr(cur, "value", str(cur)) if cur is not None else ""
+                        except Exception:
+                            cur_val = ""
+                        if str(cur_val).lower() != "happy":
+                            return
+                        if self.emotion_engine:
+                            await self.emotion_engine.set_emotion("neutral")
+                        if self.display_manager:
+                            await self.display_manager.show_animation("neutral")
+                        if self.motion_behavior:
+                            await self.motion_behavior.notify_emotion("neutral")
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        return
+
+                asyncio.create_task(_return_to_neutral_later(), name="cute-return-neutral")
+
+            self.cute_gesture_behavior = CuteGestureBehavior(
+                self.config,
+                self.camera_manager,
+                self.vision_service,
+                should_run=self._gestures_should_run,
+                on_cute=_on_cute,
+            )
+            try:
+                await self.cute_gesture_behavior.initialize()
+            except Exception as e:
+                self.logger.warning(f"Не удалось инициализировать CuteGestureBehavior: {e}")
+                self.cute_gesture_behavior = None
             
             # Инициализация сервисов
             self.smart_home_service = SmartHomeService(self.config)
@@ -451,6 +533,11 @@ class RobotEva:
         if self.gun_gesture_behavior:
             try:
                 await self.gun_gesture_behavior.start()
+            except Exception:
+                pass
+        if self.cute_gesture_behavior:
+            try:
+                await self.cute_gesture_behavior.start()
             except Exception:
                 pass
 
@@ -718,6 +805,10 @@ class RobotEva:
                 if self.is_listening:
                     continue
 
+                # Если робот неактивен (Stop команда), не инициировать разговор
+                if not self._is_active:
+                    continue
+
                 # If presence is required and sensor exists -> check.
                 if require_presence and self.sensor_manager:
                     try:
@@ -886,6 +977,50 @@ class RobotEva:
             self._heartbeat()
             
             self.logger.info(f"Heard (STT): {self._short(text)}")
+
+            # Проверка команд управления активностью (Stop/Resume)
+            if bool(self.config.get("behavior.activity_control.enabled", True)):
+                text_lower = text.lower().strip()
+                
+                # Команды для остановки
+                stop_commands = self.config.get("behavior.activity_control.stop_commands", [
+                    "stop", "стоп", "замолчи", "молчать", "тихо", "заткнись"
+                ])
+                # Команды для возобновления
+                resume_commands = self.config.get("behavior.activity_control.resume_commands", [
+                    "давай поговорим", "поговорим", "resume", "продолжай", "начинай", "говори"
+                ])
+                
+                # Фразы ответа
+                stop_response = self.config.get("behavior.activity_control.stop_response", "Хорошо, молчу")
+                resume_response = self.config.get("behavior.activity_control.resume_response", "Да, давай поговорим!")
+                
+                if any(cmd in text_lower for cmd in stop_commands):
+                    self.set_active(False)
+                    self.logger.info("Команда STOP получена - робот остановлен")
+                    if self.emotion_engine:
+                        await self.emotion_engine.set_emotion("sad")
+                    if self.display_manager:
+                        await self.display_manager.show_animation("sad")
+                    if self.text_to_speech:
+                        await self._tts_play(stop_response)
+                    return True
+                
+                if any(cmd in text_lower for cmd in resume_commands):
+                    self.set_active(True)
+                    self.logger.info("Команда RESUME получена - робот активирован")
+                    if self.emotion_engine:
+                        await self.emotion_engine.set_emotion("happy")
+                    if self.display_manager:
+                        await self.display_manager.show_animation("happy")
+                    if self.text_to_speech:
+                        await self._tts_play(resume_response)
+                    return True
+                
+                # Если робот неактивен, игнорируем все остальные команды
+                if not self._is_active:
+                    self.logger.info("Робот неактивен - команда проигнорирована")
+                    return False
 
             # Thinking state while we call LLM / actions
             if self.led_controller:
@@ -1134,6 +1269,12 @@ class RobotEva:
             except Exception:
                 pass
             self.heart_gesture_behavior = None
+        if self.cute_gesture_behavior:
+            try:
+                await self.cute_gesture_behavior.stop()
+            except Exception:
+                pass
+            self.cute_gesture_behavior = None
         if self.face_tracking_behavior:
             try:
                 await self.face_tracking_behavior.stop()
