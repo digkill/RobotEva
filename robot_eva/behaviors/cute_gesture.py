@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+import random
 from typing import Any, Awaitable, Callable, Optional
 
 
@@ -40,16 +41,17 @@ class CuteGestureBehavior:
 
     async def initialize(self) -> None:
         if not self.enabled:
+            self.logger.info("CuteGesture: отключен в конфигурации")
             return
         if not self.camera or not getattr(self.camera, "is_available", None) or not self.camera.is_available():
-            self.logger.info("CuteGesture: camera not available, disabled.")
+            self.logger.warning("CuteGesture: камера недоступна, отключен")
             self.enabled = False
             return
         if not self.vision:
-            self.logger.info("CuteGesture: vision service not available, disabled.")
+            self.logger.warning("CuteGesture: Vision service недоступен, отключен")
             self.enabled = False
             return
-        self.logger.info("CuteGesture enabled (vision-based)")
+        self.logger.info("✅ CuteGesture включен (vision-based)")
 
     async def start(self) -> None:
         if not self.enabled:
@@ -95,6 +97,9 @@ class CuteGestureBehavior:
             "Be SENSITIVE - detect even casual cute gestures."
         )
 
+        # Небольшая случайная задержка при старте, чтобы жесты не синхронизировались
+        await asyncio.sleep(random.uniform(0.1, 0.5))
+        
         while self._running:
             try:
                 await asyncio.sleep(interval_s)
@@ -118,15 +123,28 @@ class CuteGestureBehavior:
                     self._hits = 0
                     continue
 
-                txt = await self.vision.describe_scene(frame, prompt=prompt, language="en", max_tokens=max_tokens)
-                ans = (txt or "").strip().upper()
+                # Логируем попытку распознавания
+                self.logger.debug(f"CuteGesture: проверяю жест...")
+                try:
+                    txt = await self.vision.describe_scene(frame, prompt=prompt, language="en", max_tokens=max_tokens)
+                    ans = (txt or "").strip().upper()
+                    # Выводим ответ Vision API для диагностики
+                    if ans:
+                        self.logger.info(f"CuteGesture: Vision API ответил: '{ans}'")
+                    else:
+                        self.logger.warning(f"CuteGesture: Vision API вернул пустой ответ")
+                except Exception as e:
+                    self.logger.warning(f"CuteGesture: ошибка Vision API: {e}")
+                    self._hits = 0
+                    continue
 
                 is_cute = ans.startswith("CUTE")
                 if is_cute:
                     self._hits += 1
-                    self.logger.info(f"CuteGesture: CUTE hit {self._hits}/{consecutive}")
+                    self.logger.info(f"CuteGesture: ✅ CUTE обнаружен! {self._hits}/{consecutive}")
                 else:
                     self._hits = 0
+                    self.logger.debug(f"CuteGesture: жест не обнаружен (ответ: '{ans}')")
 
                 if self._hits >= consecutive:
                     self._hits = 0

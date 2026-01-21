@@ -7,6 +7,7 @@ import asyncio
 import base64
 import cv2
 import numpy as np
+import time
 from typing import Optional
 
 from ..utils.http_client import create_httpx_client
@@ -30,6 +31,13 @@ class VisionService:
                 self.client = openai.OpenAI(api_key=self.api_key, http_client=create_httpx_client(config))
             except TypeError:
                 self.client = openai.OpenAI(api_key=self.api_key)
+        
+        # Rate limiting: последний запрос и минимальный интервал между запросами
+        self._last_request_ts: float = 0.0
+        self._min_request_interval: float = 5.0  # Минимум 5 секунд между запросами (увеличено для предотвращения 429)
+        self._rate_limit_until: float = 0.0  # Время до которого нужно ждать после 429 ошибки
+        self._consecutive_429_errors: int = 0  # Счётчик последовательных ошибок 429
+        self._request_lock = asyncio.Lock()  # Глобальный lock для последовательных запросов
     
     async def initialize(self):
         """Инициализация сервиса"""
@@ -93,42 +101,112 @@ class VisionService:
                 prompt_text = self._default_prompt(lang)
             mt = int(max_tokens if max_tokens is not None else self.max_tokens)
             
-            # Вызов OpenAI Vision API
-            response = await asyncio.to_thread(
-                self.client.chat.completions.create,
-                model=self.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
+            # Глобальный lock для последовательных запросов (предотвращает одновременные запросы от разных жестов)
+            async with self._request_lock:
+                # Rate limiting: проверяем минимальный интервал между запросами
+                now = time.time()
+                if now < self._rate_limit_until:
+                    wait_time = self._rate_limit_until - now
+                    self.logger.debug(f"Vision API: ждём {wait_time:.1f}с из-за rate limit")
+                    await asyncio.sleep(wait_time)
+                    now = time.time()
+                
+                # Минимальный интервал между любыми запросами
+                time_since_last = now - self._last_request_ts
+                if time_since_last < self._min_request_interval:
+                    wait_time = self._min_request_interval - time_since_last
+                    self.logger.debug(f"Vision API: ждём {wait_time:.1f}с для соблюдения интервала")
+                    await asyncio.sleep(wait_time)
+                
+                self._last_request_ts = time.time()
+                
+                # Вызов OpenAI Vision API
+                try:
+                    response = await asyncio.to_thread(
+                        self.client.chat.completions.create,
+                        model=self.model,
+                        messages=[
                             {
-                                "type": "text",
-                                "text": prompt_text
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{image_base64}"
-                                }
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": prompt_text
+                                    },
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": f"data:image/jpeg;base64,{image_base64}"
+                                        }
+                                    }
+                                ]
                             }
-                        ]
-                    }
-                ],
-                max_tokens=mt,
-            )
-            
-            description = response.choices[0].message.content
-            # Avoid spamming logs for classifier-like prompts (gestures return NO/HEART/GUN).
-            d = (description or "").strip()
-            p = (prompt_text or "").strip().lower()
-            if ("reply with exactly" in p) or ("reply with exactly:" in p):
-                self.logger.debug(f"Vision classify: {d}")
-            else:
-                self.logger.info(f"Описание сцены: {description}")
-            return description
+                        ],
+                        max_tokens=mt,
+                        timeout=30.0,  # Таймаут запроса
+                    )
+                    
+                    # Успешный запрос - сбрасываем rate limit и счётчик ошибок
+                    self._rate_limit_until = 0.0
+                    self._consecutive_429_errors = 0
+                    
+                    description = response.choices[0].message.content
+                    # Avoid spamming logs for classifier-like prompts (gestures return NO/HEART/GUN).
+                    d = (description or "").strip()
+                    p = (prompt_text or "").strip().lower()
+                    if ("reply with exactly" in p) or ("reply with exactly:" in p):
+                        self.logger.debug(f"Vision classify: {d}")
+                    else:
+                        self.logger.info(f"Описание сцены: {description}")
+                    return description
+                    
+                except openai.RateLimitError as e:
+                    # Ошибка 429 - превышен лимит запросов
+                    # Экспоненциальная задержка: чем больше ошибок подряд, тем дольше ждём
+                    self._consecutive_429_errors += 1
+                    wait_seconds = min(300.0, 30.0 * (2 ** (self._consecutive_429_errors - 1)))  # До 5 минут максимум
+                    self._rate_limit_until = time.time() + wait_seconds
+                    self.logger.warning(
+                        f"Vision API: превышен лимит запросов (429). "
+                        f"Ждём {wait_seconds:.0f} секунд перед следующим запросом "
+                        f"(ошибок подряд: {self._consecutive_429_errors}). "
+                        f"Увеличьте interval_seconds в конфиге для жестов."
+                    )
+                    return None
+                except openai.APIError as e:
+                    # Другие ошибки API (включая insufficient_quota)
+                    error_code = getattr(e, 'status_code', None) or getattr(e, 'code', None)
+                    if error_code == 429:
+                        self._consecutive_429_errors += 1
+                        wait_seconds = min(300.0, 30.0 * (2 ** (self._consecutive_429_errors - 1)))
+                        self._rate_limit_until = time.time() + wait_seconds
+                        self.logger.warning(
+                            f"Vision API: превышен лимит запросов (429). "
+                            f"Ждём {wait_seconds:.0f} секунд перед следующим запросом "
+                            f"(ошибок подряд: {self._consecutive_429_errors})."
+                        )
+                    else:
+                        self.logger.error(f"Vision API ошибка: {e}")
+                    return None
+                except Exception as e:
+                    # Проверяем, не является ли это ошибкой 429
+                    error_str = str(e).lower()
+                    if "429" in error_str or "rate limit" in error_str or "quota" in error_str:
+                        self._consecutive_429_errors += 1
+                        wait_seconds = min(300.0, 30.0 * (2 ** (self._consecutive_429_errors - 1)))
+                        self._rate_limit_until = time.time() + wait_seconds
+                        self.logger.warning(
+                            f"Vision API: превышен лимит запросов. "
+                            f"Ждём {wait_seconds:.0f} секунд перед следующим запросом "
+                            f"(ошибок подряд: {self._consecutive_429_errors})."
+                        )
+                    else:
+                        self.logger.error(f"Ошибка описания сцены: {e}")
+                    return None
             
         except Exception as e:
-            self.logger.error(f"Ошибка описания сцены: {e}")
+            # Общая обработка ошибок для всего метода
+            self.logger.error(f"Критическая ошибка в describe_scene: {e}")
             return None
     
     async def recognize_objects(self, image: np.ndarray) -> list:

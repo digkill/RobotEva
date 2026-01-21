@@ -107,7 +107,7 @@ class LLMService:
 Верни JSON с полями:
 - response: текстовый ответ
 - actions: массив действий, каждое действие имеет:
-  - type: тип действия (smart_home, search, play_music, play_video, servo_move, emotion, animation, gesture)
+  - type: тип действия (smart_home, search, face_search, play_music, play_video, servo_move, emotion, animation, gesture)
   - command/query/url/angle: параметры действия
   - servo: номер сервопривода (для servo_move)
   - value/name/times: параметры для emotion/animation/gesture
@@ -115,6 +115,13 @@ class LLMService:
 Примеры действий:
 - smart_home: {{"type": "smart_home", "command": "включить свет в гостиной"}}
 - search: {{"type": "search", "query": "погода в Москве"}}
+- face_search: {{"type": "face_search", "image_url": "https://example.com/image.jpg"}}
+- code_analysis: {{"type": "code_analysis", "action": "analyze"}}  // analyze, improve, status
+- creativity: {{"type": "creativity", "action": "story"}}  // story, joke, solution, inspire
+- social_learning: {{"type": "social_learning", "action": "analyze"}}  // analyze, adapt, status
+- memory: {{"type": "memory", "action": "recall"}}  // recall, search, stats, context
+- self_development: {{"type": "self_development", "action": "evolution"}}  // evolution, skills, insights, reflect
+- code_improvements: {{"type": "code_improvements", "action": "history"}}  // history, count, apply
 - play_music: {{"type": "play_music", "query": "классическая музыка"}}
 - servo_move: {{"type": "servo_move", "servo": 0, "angle": 45}}
 - emotion: {{"type":"emotion","value":"wink"}}  (или love, ahegao и т.д.)

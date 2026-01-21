@@ -39,6 +39,8 @@ class AudioManager:
         self.output_device_index = config.get("hardware.audio.output_device", None)
         # If true and output is PipeWire/Pulse ("pulse"), prefer aplay -D pulse for better resampling quality.
         self.prefer_aplay_on_pulse = bool(config.get("hardware.audio.prefer_aplay_on_pulse", True))
+        # Громкость динамика (0.0 - 1.0, где 1.0 = 100%)
+        self.volume = float(config.get("hardware.audio.volume", 1.0))
         self._output_device_name = None
         
         self.audio = None
@@ -167,6 +169,9 @@ class AudioManager:
                 f"lazy_input={self.lazy_input}, lazy_output={self.lazy_output})"
             )
             
+            # Установка громкости динамика
+            await self._set_system_volume(self.volume)
+            
         except Exception as e:
             self.logger.error(f"Ошибка инициализации аудио: {e}")
             raise
@@ -207,6 +212,69 @@ class AudioManager:
                 self.logger.info(f"Найден USB динамик: {info['name']} (индекс {i})")
                 return i
         return None
+    
+    async def _set_system_volume(self, volume: float) -> None:
+        """
+        Установка громкости системного аудио-выхода
+        
+        Args:
+            volume: Громкость от 0.0 до 1.0 (1.0 = 100%)
+        """
+        # Ограничиваем значение от 0.0 до 1.0
+        volume = max(0.0, min(1.0, float(volume)))
+        
+        try:
+            # Пробуем PipeWire (wpctl) - более современная система
+            result = await asyncio.create_subprocess_exec(
+                "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", str(volume),
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL
+            )
+            await result.wait()
+            if result.returncode == 0:
+                # Также снимаем mute на всякий случай
+                unmute_result = await asyncio.create_subprocess_exec(
+                    "wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL
+                )
+                await unmute_result.wait()
+                self.logger.info(f"Громкость установлена через PipeWire: {volume * 100:.0f}%")
+                return
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            self.logger.debug(f"PipeWire (wpctl) недоступен: {e}")
+        
+        try:
+            # Fallback на PulseAudio (pactl)
+            # В PulseAudio громкость указывается в процентах (0-100) или в формате 0.00-1.00
+            volume_percent = int(volume * 100)
+            result = await asyncio.create_subprocess_exec(
+                "pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{volume_percent}%",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL
+            )
+            await result.wait()
+            if result.returncode == 0:
+                # Снимаем mute
+                unmute_result = await asyncio.create_subprocess_exec(
+                    "pactl", "set-sink-mute", "@DEFAULT_SINK@", "0",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL
+                )
+                await unmute_result.wait()
+                self.logger.info(f"Громкость установлена через PulseAudio: {volume * 100:.0f}%")
+                return
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            self.logger.debug(f"PulseAudio (pactl) недоступен: {e}")
+        
+        self.logger.warning(
+            f"Не удалось установить громкость программно (wpctl/pactl недоступны). "
+            f"Используйте системные настройки для установки громкости {volume * 100:.0f}%"
+        )
     
     async def record_audio(self, duration: float = 5.0) -> bytes:
         """

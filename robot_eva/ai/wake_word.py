@@ -27,7 +27,7 @@ class WakeWordDetector:
         self.hey_eva_clf = None
         self._consecutive_hits = 0
 
-        self.oww_mode = str(config.get("ai.wake_word.openwakeword.mode", "custom")).strip().lower()
+        self.oww_mode = str(config.get("ai.wake_word.openwakeword.mode", "onnx")).strip().lower()
         self.oww_threshold = float(config.get("ai.wake_word.openwakeword.threshold", 0.6))
         self.oww_consecutive_frames = int(config.get("ai.wake_word.openwakeword.consecutive_frames", 3))
         self.oww_debounce_seconds = float(config.get("ai.wake_word.openwakeword.debounce_seconds", 1.2))
@@ -37,6 +37,10 @@ class WakeWordDetector:
         self.oww_device_index = config.get("ai.wake_word.openwakeword.device_index", None)
         self.hey_eva_classifier_path = str(
             config.get("ai.wake_word.openwakeword.classifier_path", "/home/pi/Projects/RobotEva/models/openwakeword/hey_eva_classifier.pkl")
+        )
+        # Путь к кастомной ONNX модели "Hey Eva"
+        self.hey_eva_onnx_path = str(
+            config.get("ai.wake_word.openwakeword.hey_eva_onnx_path", "/home/pi/Projects/RobotEva/models/openwakeword/hey_eva.onnx")
         )
         self._last_trigger_ts = 0.0
 
@@ -111,29 +115,52 @@ class WakeWordDetector:
                 sr=16000,
             )
 
-            model_paths = []
-            for name in self.oww_models:
-                # Explicit path
-                if isinstance(name, str) and os.path.exists(name):
-                    model_paths.append(name)
-                    continue
+            # Проверяем наличие кастомной ONNX модели "Hey Eva" (приоритет)
+            if self.oww_mode == "onnx" or (self.oww_mode == "custom" and os.path.exists(self.hey_eva_onnx_path)):
+                # Используем кастомную ONNX модель "Hey Eva"
+                if os.path.exists(self.hey_eva_onnx_path):
+                    self.logger.info(f"Используется кастомная ONNX модель: {self.hey_eva_onnx_path}")
+                    model_paths = [self.hey_eva_onnx_path]
+                    self.oww_mode = "onnx"
+                else:
+                    self.logger.warning(
+                        f'Hey Eva ONNX модель не найдена: {self.hey_eva_onnx_path}. '
+                        'Проверяю классификатор...'
+                    )
+                    # Fallback на классификатор
+                    if os.path.exists(self.hey_eva_classifier_path):
+                        self.oww_mode = "custom"
+                        self.hey_eva_clf = pickle.load(open(self.hey_eva_classifier_path, "rb"))
+                        self.logger.info(f"Используется классификатор: {self.hey_eva_classifier_path}")
+                    else:
+                        self.logger.warning('Классификатор не найден. Используем pretrained режим.')
+                        self.oww_mode = "pretrained"
+            
+            # Если не используем ONNX модель, загружаем стандартные модели
+            if self.oww_mode != "onnx":
+                model_paths = []
+                for name in self.oww_models:
+                    # Explicit path
+                    if isinstance(name, str) and os.path.exists(name):
+                        model_paths.append(name)
+                        continue
 
-                if isinstance(name, str) and name in models_map:
-                    url = models_map[name].get("download_url")
-                    if not url:
-                        raise RuntimeError(f"OpenWakeWord: no download_url for model '{name}'")
-                    # Use ONNX framework on Pi (tflite-runtime wheel not available for Python 3.13)
-                    # Release assets provide both .tflite and .onnx.
-                    url = url.replace(".tflite", ".onnx")
-                    filename = os.path.basename(url)
-                    dest = os.path.join(cache_dir, filename)
-                    if not os.path.exists(dest):
-                        await _download(url, dest)
-                    model_paths.append(dest)
-                    continue
+                    if isinstance(name, str) and name in models_map:
+                        url = models_map[name].get("download_url")
+                        if not url:
+                            raise RuntimeError(f"OpenWakeWord: no download_url for model '{name}'")
+                        # Use ONNX framework on Pi (tflite-runtime wheel not available for Python 3.13)
+                        # Release assets provide both .tflite and .onnx.
+                        url = url.replace(".tflite", ".onnx")
+                        filename = os.path.basename(url)
+                        dest = os.path.join(cache_dir, filename)
+                        if not os.path.exists(dest):
+                            await _download(url, dest)
+                        model_paths.append(dest)
+                        continue
 
-                raise RuntimeError(f"OpenWakeWord: unknown model '{name}'. Use a known name like 'hey_jarvis' or give a path.")
-
+                    raise RuntimeError(f"OpenWakeWord: unknown model '{name}'. Use a known name like 'hey_jarvis' or give a path.")
+            
             if self.oww_mode == "custom":
                 # Custom "Hey Eva" classifier over AudioFeatures embeddings
                 if not os.path.exists(self.hey_eva_classifier_path):
@@ -145,16 +172,17 @@ class WakeWordDetector:
                 else:
                     self.hey_eva_clf = pickle.load(open(self.hey_eva_classifier_path, "rb"))
 
-            if self.oww_mode == "pretrained":
-                # Pretrained openwakeword model(s) (ONNX)
-                self.oww_model = Model(
-                    wakeword_models=model_paths,
-                    inference_framework="onnx",
-                    # Override feature model paths to our cache dir
-                    melspec_model_path=mels_onnx,
-                    embedding_model_path=emb_onnx,
-                    vad_threshold=0,
-                )
+            if self.oww_mode == "pretrained" or self.oww_mode == "onnx":
+                # Pretrained openwakeword model(s) или кастомная ONNX модель (ONNX)
+                if model_paths:
+                    self.oww_model = Model(
+                        wakeword_models=model_paths,
+                        inference_framework="onnx",
+                        # Override feature model paths to our cache dir
+                        melspec_model_path=mels_onnx,
+                        embedding_model_path=emb_onnx,
+                        vad_threshold=0,
+                    )
 
             # PvRecorder is a solid 16kHz mono source; openwakeword likes multiples of 1280 samples (80ms)
             device_index = None
@@ -238,7 +266,7 @@ class WakeWordDetector:
 
                 return False
 
-            # Pretrained mode: use openwakeword models
+            # Pretrained/ONNX mode: use openwakeword models или кастомная ONNX модель
             if not self.oww_model:
                 return False
 
@@ -255,9 +283,16 @@ class WakeWordDetector:
                         best_score = vv
                         best_name = k
 
+            # Для кастомной модели "Hey Eva" имя может быть из пути файла
+            if self.oww_mode == "onnx" and best_name is None and best_score > 0:
+                # Если модель не возвращает имя, используем имя из пути
+                model_name = os.path.basename(self.hey_eva_onnx_path).replace(".onnx", "").replace("_", " ").title()
+                best_name = model_name if model_name else "Hey Eva"
+
             if best_score >= self.oww_threshold and (now - self._last_trigger_ts) >= self.oww_debounce_seconds:
                 self._last_trigger_ts = now
-                self.logger.info(f"Wake word обнаружен (OpenWakeWord): {best_name} score={best_score:.2f}")
+                wake_word_name = best_name if best_name else "Hey Eva"
+                self.logger.info(f"Wake word обнаружен: '{wake_word_name}' score={best_score:.2f}")
                 return True
 
             return False

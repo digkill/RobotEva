@@ -30,6 +30,7 @@ from ..services.smart_home import SmartHomeService
 from ..services.internet import InternetService
 from ..services.media import MediaService
 from ..utils.robot_actions import extract_robot_actions
+from .consciousness import ConsciousnessContainer
 
 
 class RobotEva:
@@ -59,6 +60,7 @@ class RobotEva:
         self.smart_home_service = None
         self.internet_service = None
         self.media_service = None
+        self.consciousness = None  # Контейнер сознания
         
         self.is_running = False
         self.is_listening = False
@@ -137,10 +139,45 @@ class RobotEva:
             if self.display_manager:
                 await self.display_manager.set_speaking(False)
 
+    async def _set_emotion_and_animation(self, emotion: str, source: str = "unknown"):
+        """
+        Установить эмоцию и анимацию с логированием
+
+        Args:
+            emotion: Название эмоции
+            source: Источник установки эмоции
+        """
+        self.logger.debug(f"😊 Эмоция '{emotion}' установлена (источник: {source})")
+
+        if self.emotion_engine:
+            try:
+                await self.emotion_engine.set_emotion(emotion)
+                self.logger.debug("   ├─> Emotion Engine: ✓")
+            except Exception as e:
+                self.logger.warning(f"   ├─> Emotion Engine: ошибка - {e}")
+
+        if self.display_manager:
+            try:
+                await self.display_manager.show_animation(emotion)
+                self.logger.debug("   ├─> Display Manager: ✓")
+            except Exception as e:
+                self.logger.warning(f"   ├─> Display Manager: ошибка - {e}")
+
+        if self.motion_behavior:
+            try:
+                await self.motion_behavior.notify_emotion(emotion)
+                self.logger.debug("   └─> Motion Behavior: ✓")
+            except Exception as e:
+                self.logger.warning(f"   └─> Motion Behavior: ошибка - {e}")
+
     def _gestures_should_run(self) -> bool:
         if not bool(self.config.get("behavior.gestures.enabled", True)):
             return False
-        if not bool(self.is_running) or bool(self.is_listening) or bool(getattr(self, "_speaking_flag", False)):
+        if not bool(self.is_running):
+            return False
+        if bool(self.is_listening):
+            return False
+        if bool(getattr(self, "_speaking_flag", False)):
             return False
         try:
             window = float(self.config.get("behavior.gestures.active_window_seconds", 0))
@@ -149,7 +186,18 @@ class RobotEva:
         # window <= 0 => always
         if window <= 0:
             return True
-        return (time.time() - float(self._last_interaction_ts or 0.0)) <= window
+        elapsed = time.time() - float(self._last_interaction_ts or 0.0)
+        should_run = elapsed <= window
+        # Логируем только при изменении статуса (чтобы не спамить)
+        if not hasattr(self, "_last_gesture_status"):
+            self._last_gesture_status = None
+        if self._last_gesture_status != should_run:
+            if should_run:
+                self.logger.info("✅ Жесты активны (окно: %.1f сек)", window - elapsed if window > 0 else float('inf'))
+            else:
+                self.logger.info("❌ Жесты неактивны (прошло %.1f сек, окно: %.1f сек)", elapsed, window)
+            self._last_gesture_status = should_run
+        return should_run
 
     def _heartbeat(self):
         self._heartbeat_ts = time.time()
@@ -226,8 +274,21 @@ class RobotEva:
             self.wake_word_detector = WakeWordDetector(self.config)
             try:
                 await self.wake_word_detector.initialize()
+                self.logger.info("✅ Wake word детектор инициализирован")
+
+                # Показываем текущую конфигурацию wake word
+                require_wake_up = bool(self.config.get("ai.wake_word.require_wake_up", False))
+                mode = str(self.config.get("ai.wake_word.openwakeword.mode", "onnx"))
+                hey_eva_path = str(self.config.get("ai.wake_word.openwakeword.hey_eva_onnx_path", ""))
+
+                self.logger.info(f"🎤 Wake word конфигурация:")
+                self.logger.info(f"   • Требуется 'wake up': {require_wake_up}")
+                self.logger.info(f"   • Режим: {mode}")
+                self.logger.info(f"   • Модель 'Hey Eva': {hey_eva_path}")
+                self.logger.info(f"   • Команда активации: 'Hey Eva' {'wake up' if require_wake_up else ''}")
+
             except Exception as e:
-                self.logger.warning(f"Не удалось инициализировать wake word детектор: {e}")
+                self.logger.warning(f"❌ Не удалось инициализировать wake word детектор: {e}")
                 self.wake_word_detector = None
             
             self.speech_to_text = SpeechToText(self.config)
@@ -266,6 +327,19 @@ class RobotEva:
                 self.logger.warning(f"Не удалось инициализировать систему эмоций: {e}")
                 # Создаем заглушку, чтобы не было ошибок
                 self.emotion_engine = None
+            
+            # Инициализация контейнера сознания (самообучение и эволюция)
+            consciousness_enabled = self.config.get("consciousness.enabled", True)
+            if consciousness_enabled:
+                try:
+                    self.consciousness = ConsciousnessContainer(self.config, robot_instance=self)
+                    await self.consciousness.initialize()
+                    self.logger.info("✅ Контейнер сознания инициализирован")
+                except Exception as e:
+                    self.logger.warning(f"Не удалось инициализировать контейнер сознания: {e}")
+                    self.consciousness = None
+            else:
+                self.logger.info("Контейнер сознания отключен в конфигурации")
 
             # Gesture: heart -> love animation (vision-based)
             async def _on_heart():
@@ -495,7 +569,11 @@ class RobotEva:
             
             self.internet_service = InternetService(self.config)
             await self.internet_service.initialize()
-            
+
+            # Устанавливаем связь между сервисами
+            if self.vision_service:
+                self.internet_service.set_vision_service(self.vision_service)
+
             self.media_service = MediaService(self.config)
             await self.media_service.initialize()
             
@@ -555,8 +633,28 @@ class RobotEva:
         if self.config.get("behavior.watchdog.enabled", True):
             self._watchdog_task = asyncio.create_task(self._watchdog_loop(), name="watchdog")
         
+        # Запуск контейнера сознания
+        if self.consciousness:
+            try:
+                await self.consciousness.start()
+            except Exception as e:
+                self.logger.warning(f"Ошибка запуска контейнера сознания: {e}")
+        
+        # Запуск мониторинга статуса
+        status_task = asyncio.create_task(self._status_monitor_loop())
+        self.logger.info("📊 Мониторинг статуса запущен")
+
         # Запуск основного цикла
-        await self._main_loop()
+        try:
+            await self._main_loop()
+        finally:
+            # Остановка мониторинга
+            status_task.cancel()
+            try:
+                await status_task
+            except asyncio.CancelledError:
+                pass
+            self.logger.info("📊 Мониторинг статуса остановлен")
 
     async def _startup_greeting(self):
         """Приветствие при запуске (один раз)"""
@@ -691,19 +789,144 @@ class RobotEva:
 
                 # Ожидание wake word (OpenWakeWord)
                 if self.wake_word_detector:
-                    if await self.wake_word_detector.detect():
-                        self.logger.info("Wake word обнаружен!")
-                        if self.led_controller:
-                            await self.led_controller.set_status("listening")
-                        if self.emotion_engine:
-                            await self.emotion_engine.set_emotion("listening")
-                        if self.display_manager:
-                            await self.display_manager.show_animation("listening")
-                        if self.motion_behavior:
-                            await self.motion_behavior.notify_emotion("listening")
+                    try:
+                        wake_word_detected = await self.wake_word_detector.detect()
+                        if wake_word_detected:
+                            self.logger.info("🎤 Wake word 'Hey Eva' ОБНАРУЖЕН! 🔊")
+                            self.logger.info("   └─> Активация голосового ассистента...")
+                            self.logger.info("   └─> Подготовка к прослушиванию команды...")
+                    except Exception as e:
+                        self.logger.warning(f"❌ Ошибка wake word детектора: {e}")
+                        self.logger.debug(f"   └─> Детали ошибки: {type(e).__name__}")
+                        continue
+
+                    if wake_word_detected:
                         
-                        # Слушаем команду
-                        await self._process_command()
+                        # Проверяем, нужно ли дополнительное "wake up"
+                        require_wake_up = bool(self.config.get("ai.wake_word.require_wake_up", False))
+                        
+                        if require_wake_up:
+                            # Записываем короткий фрагмент для проверки "wake up"
+                            self.logger.info("Проверяю наличие 'wake up' после wake word...")
+                            if self.led_controller:
+                                await self.led_controller.set_status("listening")
+                            if self.emotion_engine:
+                                await self.emotion_engine.set_emotion("listening")
+                            if self.display_manager:
+                                await self.display_manager.show_animation("listening")
+                            if self.motion_behavior:
+                                await self.motion_behavior.notify_emotion("listening")
+                            
+                            # Останавливаем wake word детектор перед записью
+                            if self.wake_word_detector:
+                                try:
+                                    await self.wake_word_detector.stop_listening()
+                                except Exception:
+                                    pass
+                            
+                            # Записываем короткий фрагмент (2.5 секунды для "wake up" + начало команды)
+                            if self.audio_manager and self.speech_to_text:
+                                try:
+                                    audio_data = await self.audio_manager.record_audio(duration=2.5)
+                                    if audio_data:
+                                        # Распознаем речь
+                                        text = await self.speech_to_text.transcribe(audio_data)
+                                        text_lower = (text or "").strip().lower()
+                                        self.logger.info(f"Распознано после 'alexa': '{text_lower}'")
+                                        
+                                        # Проверяем наличие "wake up"
+                                        if "wake up" in text_lower or "wakeup" in text_lower:
+                                            self.logger.info("✅ 'alexa wake up' обнаружено! Активирую робота...")
+                                            # Удаляем "wake up" из текста, если команда уже началась
+                                            # Например: "wake up what time is it" -> "what time is it"
+                                            command_text = text_lower.replace("wake up", "").replace("wakeup", "").strip()
+                                            
+                                            if command_text:
+                                                # Если есть команда после "wake up", обрабатываем её
+                                                self.logger.info(f"Команда после 'wake up': '{command_text}'")
+                                                # Устанавливаем флаг, что мы уже слушаем
+                                                self.is_listening = True
+                                                self._last_interaction_ts = time.time()
+                                                if self.consciousness:
+                                                    self.consciousness.update_interaction_timestamp()
+                                                    # Записываем взаимодействие для социального обучения
+                                                    await self.consciousness.social_learning.record_interaction(
+                                                        person_id="user",
+                                                        action="voice_command",
+                                                        context={"command": command_text, "type": "voice"}
+                                                    )
+                                                # Обрабатываем команду напрямую
+                                                await self._process_text_command(command_text)
+                                            else:
+                                                # Если только "wake up", слушаем полную команду
+                                                await self._process_command()
+                                        else:
+                                            self.logger.info("'wake up' не обнаружено, возвращаюсь к ожиданию")
+                                            # Возобновляем wake word детектор
+                                            if self.wake_word_detector:
+                                                try:
+                                                    await self.wake_word_detector.start_listening()
+                                                except Exception:
+                                                    pass
+                                except Exception as e:
+                                    self.logger.warning(f"Ошибка при проверке 'wake up': {e}")
+                                    # Возобновляем wake word детектор при ошибке
+                                    if self.wake_word_detector:
+                                        try:
+                                            await self.wake_word_detector.start_listening()
+                                        except Exception:
+                                            pass
+                            else:
+                                # Если нет аудио менеджера или STT, просто активируем
+                                await self._process_command()
+                        else:
+                            # Обычный режим: просто "Hey Eva" - сразу слушаем команду
+                            self.logger.info("🎯 АКТИВАЦИЯ ГОЛОСОВОГО АССИСТЕНТА")
+                            self.logger.info("   ├─> Wake word: 'Hey Eva' ✓")
+                            self.logger.info("   ├─> Режим: Прямая активация (без wake up)")
+                            self.logger.info("   └─> Статус: Начинаю прослушивание команды...")
+
+                            # Показываем, что слушаем - визуальная обратная связь
+                            self.logger.debug("   ├─> Визуальная обратная связь:")
+                            if self.led_controller:
+                                await self.led_controller.set_status("listening")
+                                self.logger.debug("   │   └─> LED: listening status")
+                            if self.emotion_engine:
+                                await self.emotion_engine.set_emotion("listening")
+                                self.logger.debug("   │   └─> Эмоция: listening")
+                            if self.display_manager:
+                                await self.display_manager.show_animation("listening")
+                                self.logger.debug("   │   └─> Дисплей: listening animation")
+                            if self.motion_behavior:
+                                await self.motion_behavior.notify_emotion("listening")
+                                self.logger.debug("   │   └─> Движения: listening behavior")
+
+                            # Останавливаем wake word детектор перед прослушиванием команды
+                            # (чтобы избежать конфликтов с PvRecorder и обычным аудио вводом)
+                            if self.wake_word_detector:
+                                try:
+                                    await self.wake_word_detector.stop_listening()
+                                    self.logger.debug("   ├─> Wake word детектор: ОСТАНОВЛЕН (избегание конфликтов)")
+                                except Exception as e:
+                                    self.logger.warning(f"   ├─> Wake word детектор: Ошибка остановки - {e}")
+
+                            # Небольшая пауза для стабилизации аудио
+                            self.logger.debug("   ├─> Аудио: Стабилизация (0.2 сек)...")
+                            await asyncio.sleep(0.2)
+
+                            # Слушаем команду
+                            self.logger.info("🎙️ ПРОСЛУШИВАНИЕ КОМАНДЫ...")
+                            await self._process_command()
+
+                            # После обработки команды возобновляем wake word детектор
+                            if self.wake_word_detector:
+                                try:
+                                    await self.wake_word_detector.start_listening()
+                                    self.logger.debug("   └─> Wake word детектор: ВОЗОБНОВЛЕН (готов к следующему wake word)")
+                                except Exception as e:
+                                    self.logger.warning(f"   └─> Wake word детектор: Ошибка возобновления - {e}")
+
+                            self.logger.info("🏁 Цикл активации завершен")
                 
                 await asyncio.sleep(0.1)
                 
@@ -858,6 +1081,14 @@ class RobotEva:
 
                 # Now listen and respond (without wake word)
                 self._last_interaction_ts = time.time()
+                if self.consciousness:
+                    self.consciousness.update_interaction_timestamp()
+                    # Записываем взаимодействие для социального обучения
+                    await self.consciousness.social_learning.record_interaction(
+                        person_id="user",
+                        action="voice_interaction",
+                        context={"type": "conversation", "duration": listen_duration}
+                    )
                 await self._process_command(record_duration=listen_duration)
                 self._last_interaction_ts = time.time()
                 self._heartbeat()
@@ -902,6 +1133,117 @@ class RobotEva:
     async def _process_command(self, record_duration: Optional[float] = None):
         """Обработка команды пользователя"""
         return await self._process_command_impl(record_duration=record_duration, allow_dialogue=True, silent_on_no_speech=False)
+    
+    async def _process_text_command(self, text: str):
+        """Обработка текстовой команды напрямую (без записи аудио и STT)"""
+        if not text or not text.strip():
+            return False
+        
+        try:
+            self.is_listening = True
+            self._last_interaction_ts = time.time()
+            self._heartbeat()
+            
+            # Stop wake-word recorder
+            if self.wake_word_detector:
+                try:
+                    await self.wake_word_detector.stop_listening()
+                except Exception:
+                    pass
+            
+            # Listening state
+            if self.led_controller:
+                await self.led_controller.set_status("listening")
+            if self.emotion_engine:
+                await self.emotion_engine.set_emotion("listening")
+            if self.display_manager:
+                await self.display_manager.show_animation("listening")
+            if self.motion_behavior:
+                await self.motion_behavior.notify_emotion("listening")
+            
+            text = text.strip()
+            self.logger.info(f"Heard (text): {self._short(text)}")
+            
+            # Проверка команд управления активностью (Stop/Resume)
+            if bool(self.config.get("behavior.activity_control.enabled", True)):
+                text_lower = text.lower().strip()
+                
+                stop_commands = self.config.get("behavior.activity_control.stop_commands", [
+                    "stop", "стоп", "замолчи", "молчать", "тихо", "заткнись"
+                ])
+                resume_commands = self.config.get("behavior.activity_control.resume_commands", [
+                    "давай поговорим", "поговорим", "resume", "продолжай", "начинай", "говори"
+                ])
+                
+                stop_response = self.config.get("behavior.activity_control.stop_response", "Хорошо, молчу")
+                resume_response = self.config.get("behavior.activity_control.resume_response", "Да, давай поговорим!")
+                
+                if any(cmd in text_lower for cmd in stop_commands):
+                    self.set_active(False)
+                    self.logger.info("Команда STOP получена - робот остановлен")
+                    if self.emotion_engine:
+                        await self.emotion_engine.set_emotion("sad")
+                    if self.display_manager:
+                        await self.display_manager.show_animation("sad")
+                    if self.text_to_speech:
+                        await self._tts_play(stop_response)
+                    return True
+                
+                if any(cmd in text_lower for cmd in resume_commands):
+                    self.set_active(True)
+                    self.logger.info("Команда RESUME получена - робот активирован")
+                    if self.emotion_engine:
+                        await self.emotion_engine.set_emotion("happy")
+                    if self.display_manager:
+                        await self.display_manager.show_animation("happy")
+                    if self.text_to_speech:
+                        await self._tts_play(resume_response)
+                    return True
+                
+                if not self._is_active:
+                    self.logger.info("Робот неактивен - команда проигнорирована")
+                    return False
+            
+            # Thinking state
+            if self.led_controller:
+                await self.led_controller.set_status("thinking")
+            if self.emotion_engine:
+                await self.emotion_engine.set_emotion("thinking")
+            if self.display_manager:
+                await self.display_manager.show_animation("thinking")
+            if self.motion_behavior:
+                await self.motion_behavior.notify_emotion("thinking")
+            
+            self.logger.info("LLM: processing command/actions…")
+            
+            # Обработка команды через LLM
+            if not self.llm_service:
+                self.logger.warning("LLM сервис недоступен")
+                return False
+            
+            command_response = await self.llm_service.process_command(text)
+            
+            # Выполнение действий
+            await self._execute_actions(command_response)
+            
+            # Генерация ответа
+            response_text = (command_response or {}).get("response", "")
+            if response_text:
+                await self._tts_play(response_text)
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Ошибка при обработке текстовой команды: {e}", exc_info=True)
+            return False
+        finally:
+            self.is_listening = False
+            # Возобновляем wake word детектор
+            if self.wake_word_detector:
+                try:
+                    await self.wake_word_detector.start_listening()
+                except Exception:
+                    pass
 
     async def _process_command_impl(
         self,
@@ -914,6 +1256,10 @@ class RobotEva:
         Returns True if we recognized non-empty user speech (STT), else False.
         """
         try:
+            self.logger.info("🎙️ НАЧАЛО ПРОСЛУШИВАНИЯ КОМАНДЫ")
+            self.logger.info(f"   ├─> Параметры: duration={record_duration}s, dialogue={allow_dialogue}, silent={silent_on_no_speech}")
+            self.logger.debug(f"   ├─> Timestamp: {time.time()}")
+
             self.is_listening = True
             self._last_interaction_ts = time.time()
             # IMPORTANT for watchdog:
@@ -946,32 +1292,55 @@ class RobotEva:
                 return
 
             dur = float(record_duration) if record_duration is not None else float(self.config.get("audio.record_duration", 5))
-            self.logger.info(f"Listening: recording audio (duration={dur:.1f}s)")
-            
+            self.logger.info(f"🎵 ЗАПИСЬ АУДИО: {dur:.1f} сек")
+            self.logger.debug(f"   ├─> Audio Manager: {'✓' if self.audio_manager else '✗'}")
+            self.logger.debug(f"   ├─> Speech-to-Text: {'✓' if self.speech_to_text else '✗'}")
+
             # Запись аудио
             self._listening_started_ts = time.time()
+            self.logger.debug("   └─> Запись начата...")
+
             audio_data = await self.audio_manager.record_audio(
                 duration=dur
             )
+
             # Recording finished -> clear timer so watchdog doesn't restart during LLM/TTS.
             self._listening_started_ts = None
             self._heartbeat()
-            try:
-                self.logger.info(f"Listening: recorded audio bytes={len(audio_data)}")
-            except Exception:
-                pass
+
+            audio_size = len(audio_data) if audio_data else 0
+            self.logger.info(f"✅ АУДИО ЗАПИСАНО: {audio_size} байт ({audio_size/1024:.1f} KB)")
+            self.logger.debug(f"   └─> Время записи: {time.time() - self._last_interaction_ts:.2f} сек")
             
             # Распознавание речи
+            self.logger.info("🗣️ РАСПознавание РЕЧИ...")
+            self.logger.debug("   ├─> STT сервис: инициализация...")
+
             if not self.speech_to_text:
-                self.logger.warning("Сервис распознавания речи недоступен")
+                self.logger.error("❌ STT сервис НЕДОСТУПЕН")
                 return False
-            
+
+            stt_start = time.time()
             text = await self.speech_to_text.transcribe(audio_data)
+            stt_duration = time.time() - stt_start
+
             if not text:
+                self.logger.warning("⚠️ РЕЧЬ НЕ РАСПОЗНАНА")
+                self.logger.debug(f"   ├─> STT время: {stt_duration:.2f} сек")
+                self.logger.debug("   └─> Причина: тишина или неразборчивая речь")
+
                 if not silent_on_no_speech:
                     if self.text_to_speech:
+                        self.logger.info("🔊 Озвучивание: 'Извините, я не расслышал'")
                         await self._tts_play("Извините, я не расслышал")
                 return False
+
+            # Речь распознана успешно
+            self.logger.info("✅ РЕЧЬ РАСПОЗНАНА")
+            self.logger.info(f"   ├─> Текст: '{text}'")
+            self.logger.debug(f"   ├─> Длина: {len(text)} символов")
+            self.logger.debug(f"   ├─> STT время: {stt_duration:.2f} сек")
+            self.logger.debug(f"   └─> Качество: {len(text.split())/stt_duration:.1f} слов/сек")
 
             self._last_interaction_ts = time.time()
             self._heartbeat()
@@ -1086,6 +1455,24 @@ class RobotEva:
                 finally:
                     pass
 
+            # Сохраняем взаимодействие в памяти для накопления знаний
+            if self.consciousness and text:
+                try:
+                    context_data = {
+                        "action_results": action_results,
+                        "robot_actions": robot_actions,
+                        "has_explicit_emotion": has_explicit,
+                        "detected_emotion": emotion_str if 'emotion_str' in locals() else None
+                    }
+
+                    await self.consciousness.record_voice_interaction(
+                        user_input=text,
+                        robot_response=answer or "",
+                        context=context_data
+                    )
+                except Exception as e:
+                    self.logger.debug(f"Не удалось сохранить взаимодействие в память: {e}")
+
             # Dialogue mode: after Eva speaks, listen for a reply and continue without wake word.
             if allow_dialogue and bool(self.config.get("behavior.dialogue.enabled", True)):
                 try:
@@ -1152,7 +1539,283 @@ class RobotEva:
                     response["search_results"] = results
                 except asyncio.TimeoutError:
                     self.logger.warning("Action timeout: search")
-            
+
+            elif action_type == "face_search":
+                try:
+                    # Получаем изображение с камеры
+                    if self.camera_manager and self.camera_manager.is_available():
+                        frame = await self.camera_manager.capture_frame()
+                        if frame is not None:
+                            import cv2
+
+                            # Конвертируем в JPEG для поиска
+                            _, buffer = cv2.imencode('.jpg', frame)
+                            image_data = buffer.tobytes()
+
+                            # Выполняем поиск по лицу
+                            search_engine = action.get("search_engine", "google")
+                            face_results = await asyncio.wait_for(
+                                self.internet_service.reverse_image_search(image_data, search_engine),
+                                timeout=timeout_s
+                            )
+                            response["face_search_results"] = face_results
+
+                            # Добавляем этическое предупреждение
+                            response["privacy_warning"] = "⚠️ Поиск по лицам может затрагивать приватность человека. Используйте ответственно и только с согласия."
+                        else:
+                            response["error"] = "Не удалось получить изображение с камеры"
+                    else:
+                        response["error"] = "Камера недоступна"
+                except asyncio.TimeoutError:
+                    self.logger.warning("Action timeout: face_search")
+
+            elif action_type == "code_analysis":
+                try:
+                    if self.consciousness and self.consciousness.code_self_analysis:
+                        analysis_action = action.get("action", "status")
+
+                        if analysis_action == "analyze":
+                            # Выполняем полный анализ кода
+                            analysis_result = await asyncio.wait_for(
+                                self.consciousness.code_self_analysis.analyze_own_code(),
+                                timeout=timeout_s * 3  # Дольше для анализа
+                            )
+                            response["code_analysis"] = {
+                                "status": "completed",
+                                "files_analyzed": analysis_result.get("summary", {}).get("total_files", 0),
+                                "issues_found": analysis_result.get("summary", {}).get("issues_count", 0),
+                                "suggestions": len(analysis_result.get("suggestions", []))
+                            }
+                        elif analysis_action == "improve":
+                            # Применяем улучшения
+                            suggestions = self.consciousness.code_self_analysis.get_improvement_suggestions("medium")
+                            improvements_applied = 0
+
+                            for suggestion in suggestions[:2]:  # Максимум 2 улучшения
+                                success = await self.consciousness.code_self_analysis.apply_improvement(suggestion, confirm=True)
+                                if success:
+                                    improvements_applied += 1
+
+                            response["code_improvements"] = {
+                                "applied": improvements_applied,
+                                "total_available": len(suggestions)
+                            }
+                        elif analysis_action == "status":
+                            # Получаем статус анализа
+                            state = self.consciousness.get_consciousness_state()
+                            response["code_status"] = state.get("code_self_analysis", {})
+                    else:
+                        response["error"] = "Система самоанализа недоступна"
+                except asyncio.TimeoutError:
+                    self.logger.warning("Action timeout: code_analysis")
+
+            elif action_type == "creativity":
+                try:
+                    if self.consciousness and self.consciousness.creativity:
+                        creativity_action = action.get("action", "inspire")
+                        theme = action.get("theme", "")
+
+                        if creativity_action == "story":
+                            story = await asyncio.wait_for(
+                                self.consciousness.creativity.tell_story(theme),
+                                timeout=timeout_s * 2
+                            )
+                            response["story"] = story or "Не удалось придумать историю"
+                        elif creativity_action == "joke":
+                            joke = await asyncio.wait_for(
+                                self.consciousness.creativity.make_joke(theme),
+                                timeout=timeout_s
+                            )
+                            response["joke"] = joke or "Не удалось придумать шутку"
+                        elif creativity_action == "solution":
+                            problem = action.get("problem", theme)
+                            solution = await asyncio.wait_for(
+                                self.consciousness.creativity.solve_problem(problem),
+                                timeout=timeout_s * 2
+                            )
+                            response["solution"] = solution or "Не удалось найти решение"
+                        elif creativity_action == "inspire":
+                            inspiration = await asyncio.wait_for(
+                                self.consciousness.creativity.get_random_inspiration(),
+                                timeout=timeout_s
+                            )
+                            response["inspiration"] = inspiration or "Не удалось найти вдохновение"
+                        elif creativity_action == "session":
+                            goal = action.get("goal", "Генерация креативных идей")
+                            session_id = await self.consciousness.creativity.start_creative_session(goal)
+                            response["creative_session"] = {
+                                "session_id": session_id,
+                                "goal": goal,
+                                "status": "started"
+                            }
+                    else:
+                        response["error"] = "Система креативности недоступна"
+                except asyncio.TimeoutError:
+                    self.logger.warning("Action timeout: creativity")
+
+            elif action_type == "social_learning":
+                try:
+                    if self.consciousness and self.consciousness.social_learning:
+                        social_action = action.get("action", "status")
+
+                        if social_action == "analyze":
+                            # Анализ социального поведения
+                            insights = self.consciousness.social_learning.get_person_insights("user")
+                            response["social_insights"] = insights or {}
+                        elif social_action == "adapt":
+                            # Получить адаптированные рекомендации
+                            recommendations = await self.consciousness.social_learning.get_adapted_response(
+                                "user", {"current_time": "evening"}
+                            )
+                            response["social_adaptation"] = recommendations or {}
+                        elif social_action == "status":
+                            # Статус социального обучения
+                            stats = self.consciousness.social_learning.get_social_stats()
+                            response["social_status"] = stats
+                    else:
+                        response["error"] = "Система социального обучения недоступна"
+                except Exception as e:
+                    self.logger.warning(f"Error in social_learning action: {e}")
+                    response["error"] = str(e)
+
+            elif action_type == "memory":
+                try:
+                    if self.consciousness and self.consciousness.context_memory:
+                        memory_action = action.get("action", "stats")
+                        query = action.get("query", "")
+
+                        if memory_action == "recall":
+                            # Получить релевантный контекст
+                            context_items = await self.consciousness.get_conversation_context(query, limit=3)
+                            response["memory_context"] = context_items
+
+                            # Сформировать ответ на основе контекста
+                            if context_items:
+                                context_summary = []
+                                for item in context_items[:2]:
+                                    if item["type"] == "conversation":
+                                        conv = item["data"]
+                                        context_summary.append(f"Ранее ты спрашивал: '{conv['user_input'][:50]}...'")
+                                        context_summary.append(f"Я ответил: '{conv['robot_response'][:100]}...'")
+
+                                if context_summary:
+                                    response["context_summary"] = " ".join(context_summary)
+
+                        elif memory_action == "search":
+                            # Поиск по памяти
+                            search_results = await self.consciousness.context_memory.search_memories(query)
+                            response["memory_search"] = search_results[:5]
+
+                        elif memory_action == "stats":
+                            # Статистика памяти
+                            stats = await self.consciousness.context_memory.get_memory_stats()
+                            response["memory_stats"] = stats
+
+                        elif memory_action == "context":
+                            # Получить текущий контекст разговора
+                            conversation_history = await self.consciousness.context_memory.get_conversation_history(limit=5)
+                            response["conversation_history"] = [
+                                {
+                                    "user": conv.user_input,
+                                    "robot": conv.robot_response,
+                                    "time": conv.timestamp
+                                } for conv in conversation_history
+                            ]
+                    else:
+                        response["error"] = "Система памяти недоступна"
+                except Exception as e:
+                    self.logger.warning(f"Error in memory action: {e}")
+                    response["error"] = str(e)
+
+            elif action_type == "self_development":
+                try:
+                    if self.consciousness and self.consciousness.context_memory:
+                        dev_action = action.get("action", "evolution")
+                        query = action.get("query", "")
+
+                        if dev_action == "evolution":
+                            # Получить историю эволюции
+                            evolution_history = await self.consciousness.context_memory.get_evolution_history(limit=10)
+                            response["evolution_history"] = [
+                                {
+                                    "stage": entry.get("evolution_stage", "unknown"),
+                                    "content": entry["content"][:100],
+                                    "confidence": entry["confidence"],
+                                    "timestamp": entry["timestamp"]
+                                } for entry in evolution_history
+                            ]
+
+                        elif dev_action == "skills":
+                            # Получить навыки саморазвития
+                            skills_context = await self.consciousness.context_memory.get_self_development_context("skill", limit=8)
+                            response["development_skills"] = [
+                                {
+                                    "content": item["content"],
+                                    "confidence": item["confidence"],
+                                    "source": item["source"]
+                                } for item in skills_context
+                            ]
+
+                        elif dev_action == "insights":
+                            # Получить инсайты из рефлексии
+                            insights_context = await self.consciousness.context_memory.get_self_development_context("reflection", limit=5)
+                            response["reflection_insights"] = [
+                                {
+                                    "content": item["content"],
+                                    "insights": item["context"].get("insights", []),
+                                    "confidence": item["confidence"]
+                                } for item in insights_context
+                            ]
+
+                        elif dev_action == "reflect":
+                            # Запустить рефлексию
+                            await self.consciousness.record_reflection_insight(
+                                reflection_type="user_requested",
+                                content=f"Запрос пользователя: {query}",
+                                insights=["Анализ запроса пользователя для саморазвития"]
+                            )
+                        response["reflection_started"] = True
+                        response["message"] = "Запущена рефлексия над вашим запросом"
+
+                    else:
+                        response["error"] = "Система саморазвития недоступна"
+                except Exception as e:
+                    self.logger.warning(f"Error in self_development action: {e}")
+                    response["error"] = str(e)
+
+            elif action_type == "code_improvements":
+                try:
+                    if self.consciousness and self.consciousness.code_self_analysis:
+                        improvement_action = action.get("action", "history")
+
+                        if improvement_action == "history":
+                            # История примененных улучшений
+                            history = self.consciousness.code_self_analysis.get_applied_improvements_history(limit=5)
+                            response["improvements_history"] = [
+                                {
+                                    "title": imp.get("title", ""),
+                                    "applied_at": imp.get("applied_at", 0),
+                                    "auto_applied": imp.get("auto_applied", False)
+                                } for imp in history
+                            ]
+
+                        elif improvement_action == "count":
+                            # Количество примененных улучшений
+                            count = self.consciousness.code_self_analysis.get_applied_improvements_count()
+                            response["improvements_count"] = count
+                            response["message"] = f"Автоматически применено {count} улучшений кода"
+
+                        elif improvement_action == "apply":
+                            # Принудительное применение улучшений
+                            await self.consciousness._apply_automatic_improvements()
+                            response["message"] = "Запущено автоматическое применение улучшений кода"
+
+                    else:
+                        response["error"] = "Система самоанализа кода недоступна"
+                except Exception as e:
+                    self.logger.warning(f"Error in code_improvements action: {e}")
+                    response["error"] = str(e)
+
             elif action_type == "play_music":
                 try:
                     await asyncio.wait_for(self.media_service.play_music(action.get("query")), timeout=timeout_s)
@@ -1286,6 +1949,15 @@ class RobotEva:
                 await self.motion_behavior.stop()
             except Exception:
                 pass
+        
+        # Остановка контейнера сознания
+        if self.consciousness:
+            try:
+                await self.consciousness.stop()
+            except Exception:
+                pass
+            self.consciousness = None
+        
         if self.servo_controller:
             await self.servo_controller.cleanup()
         if self.display_manager:
@@ -1301,3 +1973,62 @@ class RobotEva:
         
         self.logger.info("Робот Eva остановлен")
 
+    async def _status_monitor_loop(self):
+        """
+        Цикл мониторинга статуса - периодический вывод информации о состоянии
+        """
+        status_interval = 30  # Каждые 30 секунд
+        iteration = 0
+
+        await asyncio.sleep(5)  # Небольшая задержка перед первым выводом
+
+        while True:
+            try:
+                iteration += 1
+                uptime = time.time() - getattr(self, '_start_time', time.time())
+
+                # Собираем информацию о статусе
+                status_info = {
+                    "uptime": f"{uptime/60:.1f} мин",
+                    "active": "✓" if getattr(self, '_is_active', True) else "✗",
+                    "listening": "✓" if getattr(self, 'is_listening', False) else "✗",
+                    "wake_word": "✓" if self.wake_word_detector else "✗",
+                    "consciousness": "✓" if self.consciousness and self.consciousness.is_active else "✗",
+                    "memory": "✓" if self.consciousness and self.consciousness.context_memory else "✗"
+                }
+
+                # Информация о компонентах
+                components = {
+                    "audio": "✓" if self.audio_manager else "✗",
+                    "stt": "✓" if self.speech_to_text else "✗",
+                    "tts": "✓" if self.text_to_speech else "✗",
+                    "display": "✓" if self.display_manager else "✗",
+                    "camera": "✓" if self.camera_manager else "✗",
+                    "servos": "✓" if self.servos else "✗"
+                }
+
+                # Статистика взаимодействий
+                last_interaction = getattr(self, '_last_interaction_ts', 0)
+                time_since_interaction = time.time() - last_interaction
+                interaction_status = "никогда" if last_interaction == 0 else f"{time_since_interaction/60:.1f} мин назад"
+
+                # Вывод статуса
+                if iteration == 1 or iteration % 2 == 0:  # Первый раз и каждые 2 итерации (60 сек)
+                    self.logger.info("📊 СТАТУС РОБОТА EVA")
+                    self.logger.info(f"   ├─> Время работы: {status_info['uptime']}")
+                    self.logger.info(f"   ├─> Активен: {status_info['active']} | Прослушивание: {status_info['listening']}")
+                    self.logger.info(f"   ├─> Wake word: {status_info['wake_word']} | Сознание: {status_info['consciousness']}")
+                    self.logger.info(f"   ├─> Память: {status_info['memory']} | Последнее взаимодействие: {interaction_status}")
+                    self.logger.info(f"   └─> Компоненты: Audio:{components['audio']} STT:{components['stt']} TTS:{components['tts']} Display:{components['display']} Camera:{components['camera']} Servos:{components['servos']}")
+
+                else:  # Компактный вывод каждые 30 секунд
+                    self.logger.info(f"📊 Статус: ↑{status_info['uptime']} | ⚡{status_info['active']} | 👂{status_info['listening']} | 🧠{status_info['consciousness']} | 💾{status_info['memory']} | ⏰{interaction_status}")
+
+                await asyncio.sleep(status_interval)
+
+            except asyncio.CancelledError:
+                self.logger.debug("Мониторинг статуса остановлен")
+                break
+            except Exception as e:
+                self.logger.warning(f"Ошибка в мониторинге статуса: {e}")
+                await asyncio.sleep(5)

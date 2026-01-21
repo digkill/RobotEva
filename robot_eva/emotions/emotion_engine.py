@@ -26,6 +26,18 @@ class Emotion(Enum):
     ANGRY = "angry"
     AHEGAO = "ahegao"
 
+    # Новые автономные эмоции
+    CURIOUS = "curious"        # Любопытный
+    WONDER = "wonder"          # Удивление/Восхищение
+    BORED = "bored"            # Скучающий
+    LONELY = "lonely"          # Одинокий
+    PROUD = "proud"            # Гордый
+    CREATIVE = "creative"      # Творческий
+    INSPIRED = "inspired"      # Вдохновленный
+    FRUSTRATED = "frustrated"  # Разочарованный
+    HOPEFUL = "hopeful"        # Надеющийся
+    WISE = "wise"              # Мудрый
+
 
 class EmotionEngine:
     """Движок управления эмоциями робота"""
@@ -54,6 +66,18 @@ class EmotionEngine:
             Emotion.LOVE: self._love_action,
             Emotion.ANGRY: self._angry_action,
             Emotion.AHEGAO: self._ahegao_action,
+
+            # Новые автономные эмоции
+            Emotion.CURIOUS: self._curious_action,
+            Emotion.WONDER: self._wonder_action,
+            Emotion.BORED: self._bored_action,
+            Emotion.LONELY: self._lonely_action,
+            Emotion.PROUD: self._proud_action,
+            Emotion.CREATIVE: self._creative_action,
+            Emotion.INSPIRED: self._inspired_action,
+            Emotion.FRUSTRATED: self._frustrated_action,
+            Emotion.HOPEFUL: self._hopeful_action,
+            Emotion.WISE: self._wise_action,
         }
     
     async def initialize(self):
@@ -157,7 +181,59 @@ class EmotionEngine:
         """Действия для эмоции 'ahegao'"""
         # Display-only emotion for now
         pass
-    
+
+    # Новые автономные эмоции
+
+    async def _curious_action(self):
+        """Действия для эмоции 'curious' - любопытный"""
+        # Наклон головы вбок, взгляд по сторонам
+        pass
+
+    async def _wonder_action(self):
+        """Действия для эмоции 'wonder' - удивление/восхищение"""
+        # Широко открытые "глаза", медленное кивание
+        pass
+
+    async def _bored_action(self):
+        """Действия для эмоции 'bored' - скучающий"""
+        # Зевание, медленные движения, опущенная голова
+        pass
+
+    async def _lonely_action(self):
+        """Действия для эмоции 'lonely' - одинокий"""
+        # Грустные движения, взгляд вниз
+        pass
+
+    async def _proud_action(self):
+        """Действия для эмоции 'proud' - гордый"""
+        # Поднятая голова, уверенные движения
+        pass
+
+    async def _creative_action(self):
+        """Действия для эмоции 'creative' - творческий"""
+        # Быстрые движения глаз, активные жесты
+        pass
+
+    async def _inspired_action(self):
+        """Действия для эмоции 'inspired' - вдохновленный"""
+        # Энергичные движения, широкие жесты
+        pass
+
+    async def _frustrated_action(self):
+        """Действия для эмоции 'frustrated' - разочарованный"""
+        # Резкие движения, покачивание головой
+        pass
+
+    async def _hopeful_action(self):
+        """Действия для эмоции 'hopeful' - надеющийся"""
+        # Оптимистичные движения, легкие кивки
+        pass
+
+    async def _wise_action(self):
+        """Действия для эмоции 'wise' - мудрый"""
+        # Спокойные, уверенные движения
+        pass
+
     def get_current_emotion(self) -> Emotion:
         """Получение текущей эмоции"""
         return self.current_emotion

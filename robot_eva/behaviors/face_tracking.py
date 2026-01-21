@@ -130,11 +130,11 @@ class FaceTrackingBehavior:
         yaw_id = getattr(self.servos, "SERVO_HEAD_YAW", 2)    # Канал 2
         pitch_id = getattr(self.servos, "SERVO_HEAD_PITCH", 0)  # Канал 0
 
-        # Small smoothing move; for MQTT this becomes a short sequence of moves.
-        steps = int(self.config.get("behavior.face_tracking.smooth_steps", 3))
-        delay = float(self.config.get("behavior.face_tracking.smooth_delay", 0.02))
-        steps = max(1, min(8, steps))
-        delay = max(0.0, min(0.08, delay))
+        # Плавное движение; для MQTT это становится последовательностью движений.
+        steps = int(self.config.get("behavior.face_tracking.smooth_steps", 20))
+        delay = float(self.config.get("behavior.face_tracking.smooth_delay", 0.03))
+        steps = max(1, min(30, steps))
+        delay = max(0.0, min(0.1, delay))
 
         try:
             if hasattr(self.servos, "move_smooth"):
@@ -176,6 +176,8 @@ class FaceTrackingBehavior:
         log_every_s = max(0.5, min(10.0, log_every_s))
         last_log_ts = 0.0
         had_face = False
+        # Для вывода статуса обнаружения лица в консоль
+        last_face_status = None
 
         min_face_px = int(self.config.get("behavior.face_tracking.min_face_size_px", 30))
         min_face_px = max(20, min(200, min_face_px))
@@ -234,6 +236,10 @@ class FaceTrackingBehavior:
                 )
 
                 if faces is None or len(faces) == 0:
+                    # Вывод статуса в консоль при изменении
+                    if last_face_status != "no_face":
+                        self.logger.info("❌ Лицо не обнаружено")
+                        last_face_status = "no_face"
                     if debug and (t0 - last_log_ts) >= log_every_s:
                         self.logger.info("FaceTracking: faces=0")
                         last_log_ts = t0
@@ -279,10 +285,15 @@ class FaceTrackingBehavior:
 
                 await self._move_head(self._state.yaw_target, self._state.pitch_target)
 
+                # Вывод статуса в консоль при обнаружении лица
+                if last_face_status != "face_detected":
+                    self.logger.info("✅ Лицо обнаружено! Следую за лицом...")
+                    last_face_status = "face_detected"
+                
                 # Log when face is detected (throttled). Useful to confirm detection + intended movement.
                 if (log_on_face or debug) and (t0 - last_log_ts) >= log_every_s:
                     self.logger.info(
-                        "FaceTracking: faces=%d ex=%.2f ey=%.2f yaw=%.1f pitch=%.1f",
+                        "FaceTracking: faces=%d ex=%.2f ey=%.2f yaw=%.1f° pitch=%.1f°",
                         len(faces),
                         ex,
                         ey,
